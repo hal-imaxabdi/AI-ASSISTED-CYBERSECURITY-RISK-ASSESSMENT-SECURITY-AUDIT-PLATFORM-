@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Compliance Score — AuditShield{% endblock %}
+{% block page_title %}Compliance Scoring{% endblock %}
+{% block content %}
+
+<div class="compliance-hero">
+    <div class="compliance-circle-wrap">
+        <div class="compliance-circle {% if compliance_pct >= 80 %}cc-green{% elif compliance_pct >= 60 %}cc-yellow{% else %}cc-red{% endif %}">
+            <svg viewBox="0 0 120 120" class="circle-svg">
+                <circle class="circle-track" cx="60" cy="60" r="52"/>
+                <circle class="circle-progress" cx="60" cy="60" r="52"
+                    stroke-dasharray="{{ (compliance_pct / 100 * 326.7)|round(1) }} 326.7"
+                    stroke="{{ '#22c55e' if compliance_pct >= 80 else '#eab308' if compliance_pct >= 60 else '#ef4444' }}"/>
+            </svg>
+            <div class="circle-label">
+                <div class="circle-pct">{{ compliance_pct }}%</div>
+                <div class="circle-sub">Compliant</div>
+            </div>
+        </div>
+    </div>
+    <div class="compliance-hero-stats">
+        <div class="ch-stat">
+            <div class="ch-num green">{{ compliant }}</div>
+            <div class="ch-label">Compliant</div>
+        </div>
+        <div class="ch-stat">
+            <div class="ch-num yellow">{{ partial }}</div>
+            <div class="ch-label">Partial</div>
+        </div>
+        <div class="ch-stat">
+            <div class="ch-num red">{{ non_compliant }}</div>
+            <div class="ch-label">Non-Compliant</div>
+        </div>
+        <div class="ch-stat">
+            <div class="ch-num muted">{{ na }}</div>
+            <div class="ch-label">N/A</div>
+        </div>
+        <div class="ch-stat">
+            <div class="ch-num muted">{{ total_controls - assessed }}</div>
+            <div class="ch-label">Not Assessed</div>
+        </div>
+    </div>
+    <div class="compliance-formula">
+        <div class="formula-box">
+            Compliance % = ({{ compliant }} Compliant ÷ {{ assessed }} Assessed) × 100 = <strong>{{ compliance_pct }}%</strong>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <h3>Compliance by NIST CSF Function</h3>
+    </div>
+    <div class="panel-body">
+        {% set function_colors = {'Identify': '#6366f1', 'Protect': '#0ea5e9', 'Detect': '#f59e0b', 'Respond': '#ef4444', 'Recover': '#22c55e'} %}
+        <div class="function-compliance-grid">
+            {% for fs in function_stats %}
+            {% set fn_assessed = (fs['compliant_count'] or 0) + (fs['partial_count'] or 0) + (fs['non_count'] or 0) %}
+            {% set fn_pct = ((fs['compliant_count'] or 0) / fn_assessed * 100)|round(1) if fn_assessed > 0 else 0 %}
+            <div class="function-card" style="border-top: 3px solid {{ function_colors.get(fs['function_name'], '#6b7280') }}">
+                <div class="function-card-header">
+                    <span class="function-card-name">{{ fs['function_name'] }}</span>
+                    <span class="function-card-pct {% if fn_pct >= 80 %}green{% elif fn_pct >= 60 %}yellow{% else %}red{% endif %}">{{ fn_pct }}%</span>
+                </div>
+                <div class="progress-track" style="margin:0.75rem 0;">
+                    <div class="progress-fill {% if fn_pct >= 80 %}fill-green{% elif fn_pct >= 60 %}fill-yellow{% else %}fill-red{% endif %}" style="width:{{ fn_pct }}%"></div>
+                </div>
+                <div class="function-card-breakdown">
+                    <span class="green">✓ {{ fs['compliant_count'] or 0 }}</span>
+                    <span class="yellow">~ {{ fs['partial_count'] or 0 }}</span>
+                    <span class="red">✗ {{ fs['non_count'] or 0 }}</span>
+                    <span class="muted">N/A {{ fs['na_count'] or 0 }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="info-box info-blue" style="margin-top:1.5rem;">
+    <strong>Compliance Formula:</strong> Compliance % = (Number of Compliant Controls ÷ Total Assessed Controls) × 100. 
+    "Not Applicable" controls are excluded from the denominator. "Not Assessed" controls are also excluded until assessed.
+</div>
+
+{% endblock %}

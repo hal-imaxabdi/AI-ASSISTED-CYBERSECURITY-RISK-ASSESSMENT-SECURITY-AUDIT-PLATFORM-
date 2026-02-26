@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}Vulnerabilities — AuditShield{% endblock %}
+{% block page_title %}Threat & Vulnerability Identification{% endblock %}
+{% block content %}
+
+<div class="info-box info-blue" style="margin-bottom:1.5rem;">
+    <strong>Module 4 — OWASP-Based Vulnerability Identification.</strong>
+    Select an asset, then check all vulnerabilities detected or suspected. The system automatically assigns likelihood, calculates risk score, and creates audit checklist items.
+</div>
+
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header">
+        <h3>Step 1 — Select Asset</h3>
+    </div>
+    <div class="panel-body">
+        {% if assets %}
+        <div class="asset-selector-grid">
+            {% for a in assets %}
+            <a href="{{ url_for('vulnerabilities', asset_id=a['id']) }}"
+               class="asset-selector-card {% if selected_asset_id and selected_asset_id|int == a['id'] %}selected{% endif %}">
+                <div class="asc-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                </div>
+                <div class="asc-name">{{ a['name'] }}</div>
+                <div class="asc-type text-muted">{{ a['asset_type'] }}</div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="info-box info-yellow">
+            No assets found. <a href="{{ url_for('assets') }}">Register assets first</a> before mapping vulnerabilities.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if selected_asset_id %}
+{% set asset_name_display = assets | selectattr('id','equalto', selected_asset_id|int) | list %}
+<form method="POST">
+    <input type="hidden" name="asset_id" value="{{ selected_asset_id }}">
+    <div class="panel" style="margin-bottom:1.5rem;">
+        <div class="panel-header">
+            <div>
+                <h3>Step 2 — Select Vulnerabilities Detected or Suspected</h3>
+                <div class="panel-sub">Asset: <strong>{{ asset_name_display[0]['name'] if asset_name_display else 'Selected Asset' }}</strong> — Check all that apply</div>
+            </div>
+            <div style="display:flex;gap:0.75rem;align-items:center;">
+                <button type="button" class="btn btn-sm btn-outline" onclick="selectAll()">Select All</button>
+                <button type="button" class="btn btn-sm btn-ghost" onclick="clearAll()">Clear All</button>
+            </div>
+        </div>
+        <div class="panel-body" style="padding:0;">
+            {% for category, vuln_list in grouped_vulns.items() %}
+            <div class="vuln-category-block">
+                <div class="vuln-category-header">
+                    <span class="vuln-category-name">{{ category }}</span>
+                    <span class="vuln-category-count">{{ vuln_list|length }} vulnerabilities</span>
+                </div>
+                <div class="vuln-checkbox-grid">
+                    {% for v in vuln_list %}
+                    {% set already = v['code'] in already_mapped %}
+                    <label class="vuln-checkbox-card {% if already %}already-mapped{% endif %}" for="v_{{ v['code'] }}">
+                        <div class="vcc-top">
+                            <input type="checkbox" name="vuln_codes" value="{{ v['code'] }}"
+                                   id="v_{{ v['code'] }}"
+                                   class="vuln-cb"
+                                   {% if already %}checked disabled{% endif %}
+                                   onchange="updatePreview()">
+                            <div class="vcc-title-wrap">
+                                <span class="vcc-name">{{ v['name'] }}</span>
+                                {% if already %}
+                                <span class="already-tag">Already mapped</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="vcc-meta">
+                            <span class="vcc-code">{{ v['code'] }}</span>
+                            <span class="vcc-scores">
+                                L:{{ v['default_likelihood'] }} × I:{{ v['default_impact'] }} =
+                                {% set s = v['default_likelihood'] * v['default_impact'] %}
+                                <strong class="score-inline
+                                    {% if s >= 16 %}score-critical
+                                    {% elif s >= 10 %}score-high
+                                    {% elif s >= 5 %}score-medium
+                                    {% else %}score-low{% endif %}">{{ s }}</strong>
+                            </span>
+                        </div>
+                        <div class="vcc-impact">{{ v['impact_description'] }}</div>
+                        <div class="vcc-checklist">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                            Audit checklist: {{ v['checklist_item'] }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:1.5rem;">
+        <div class="panel-header"><h3>Step 3 — Confirm & Add</h3></div>
+        <div class="panel-body">
+            <div id="selection-preview" class="selection-preview hidden">
+                <div class="sp-title">Selected: <strong id="sp-count">0</strong> vulnerabilities</div>
+                <div id="sp-tags" class="sp-tags"></div>
+            </div>
+            <div class="form-group" style="margin-top:1rem;max-width:600px;">
+                <label class="form-label">Notes (optional)</label>
+                <input type="text" name="notes" class="form-input" placeholder="e.g., Detected during manual testing, suspected based on framework version...">
+            </div>
+            <div style="display:flex;gap:1rem;margin-top:1rem;align-items:center;">
+                <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+                    Add Selected Vulnerabilities &amp; Generate Checklist Items
+                </button>
+                <span class="text-muted" style="font-size:0.8rem;" id="submit-hint">Select at least one vulnerability above</span>
+            </div>
+        </div>
+    </div>
+</form>
+{% endif %}
+
+<div class="panel">
+    <div class="panel-header">
+        <h3>Vulnerability Register</h3>
+        <div style="display:flex;gap:0.75rem;align-items:center;">
+            <span class="count-badge">{{ vulns|length }} items</span>
+            {% if vulns %}
+            <a href="{{ url_for('generated_checklist') }}" class="btn btn-sm btn-outline">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
+                View Auto-Generated Checklist
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="panel-body">
+        {% if vulns %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Vulnerability</th>
+                    <th>Category</th>
+                    <th>Asset</th>
+                    <th>Likelihood</th>
+                    <th>Impact</th>
+                    <th>Risk Score</th>
+                    <th>Level</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vulns %}
+                <tr>
+                    <td>
+                        <div class="asset-name">{{ v['vuln_name'] }}</div>
+                        <div><code style="font-size:0.7rem;">{{ v['vuln_code'] }}</code></div>
+                    </td>
+                    <td><span class="tag">{{ v['category'] }}</span></td>
+                    <td>{{ v['asset_name'] }}</td>
+                    <td class="center"><div class="score-circle likelihood">{{ v['likelihood'] }}</div></td>
+                    <td class="center"><div class="score-circle impact">{{ v['impact'] }}</div></td>
+                    <td class="center"><strong style="font-size:1.1rem;">{{ v['risk_score'] }}</strong></td>
+                    <td><span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span></td>
+                    <td>
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <button class="btn btn-sm btn-ai" onclick="explainVuln('{{ v['vuln_name'] }}', '{{ v['vuln_name'] }}')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                                Explain
+                            </button>
+                            <form method="POST" action="{{ url_for('delete_vuln', vid=v['id']) }}" onsubmit="return confirm('Remove this vulnerability and its checklist item?')">
+                                <button type="submit" class="btn-icon danger">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            <p>No vulnerabilities mapped yet. Select an asset above and check the vulnerabilities detected or suspected.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="modal-overlay" id="explain-modal" onclick="closeExplainModal()">
+    <div class="modal" style="max-width:600px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+                <span class="ai-badge-sm" style="background:#7c3aed;">phi3:mini</span>
+                <h3 id="explain-modal-title">AI Explanation</h3>
+            </div>
+            <button onclick="closeExplainModal()" class="modal-close">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="explain-loading" style="display:none;align-items:center;gap:1rem;padding:1.5rem 0;color:var(--text-3);">
+                <div class="spinner"></div>
+                <span>Generating explanation with Ollama phi3:mini…</span>
+            </div>
+            <div id="explain-error" style="display:none;" class="info-box info-red"></div>
+            <div id="explain-cached" style="display:none;margin-bottom:0.75rem;background:#f0fdf4;color:#16a34a;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:600;width:fit-content;">⚡ Loaded from cache</div>
+            <div id="explain-result" class="ai-explanation"></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+const vulnData = {{ owasp_vulns | tojson }};
+
+function updatePreview() {
+    const checked = document.querySelectorAll('.vuln-cb:checked:not(:disabled)');
+    const preview = document.getElementById('selection-preview');
+    const tagsDiv = document.getElementById('sp-tags');
+    const countEl = document.getElementById('sp-count');
+    const submitBtn = document.getElementById('submit-btn');
+    const hint = document.getElementById('submit-hint');
+
+    countEl.textContent = checked.length;
+    tagsDiv.innerHTML = '';
+    checked.forEach(cb => {
+        const label = document.querySelector(`label[for="${cb.id}"]`);
+        const name = label ? label.querySelector('.vcc-name').textContent.trim() : cb.value;
+        const tag = document.createElement('span');
+        tag.className = 'sp-tag';
+        tag.textContent = name;
+        tagsDiv.appendChild(tag);
+    });
+
+    if (checked.length > 0) {
+        preview.classList.remove('hidden');
+        submitBtn.disabled = false;
+        hint.textContent = checked.length + ' vulnerability/vulnerabilities will be added with auto-generated checklist items';
+    } else {
+        preview.classList.add('hidden');
+        submitBtn.disabled = true;
+        hint.textContent = 'Select at least one vulnerability above';
+    }
+}
+
+function selectAll() {
+    document.querySelectorAll('.vuln-cb:not(:disabled)').forEach(cb => cb.checked = true);
+    updatePreview();
+}
+
+function clearAll() {
+    document.querySelectorAll('.vuln-cb:not(:disabled)').forEach(cb => cb.checked = false);
+    updatePreview();
+}
+
+function explainVuln(fullLabel, displayName) {
+    const overlay = document.getElementById('explain-modal');
+    document.getElementById('explain-modal-title').textContent = displayName;
+    document.getElementById('explain-result').innerHTML = '';
+    document.getElementById('explain-loading').style.display = 'flex';
+    document.getElementById('explain-error').style.display = 'none';
+    document.getElementById('explain-cached').style.display = 'none';
+    overlay.classList.add('active');
+
+    fetch('/explain/' + encodeURIComponent(fullLabel))
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('explain-loading').style.display = 'none';
+            if (data.error) {
+                document.getElementById('explain-error').style.display = 'block';
+                document.getElementById('explain-error').textContent = data.error;
+            } else {
+                if (data.cached) document.getElementById('explain-cached').style.display = 'block';
+                document.getElementById('explain-result').innerHTML = data.explanation.replace(/\n/g, '<br>');
+            }
+        })
+        .catch(() => {
+            document.getElementById('explain-loading').style.display = 'none';
+            document.getElementById('explain-error').style.display = 'block';
+            document.getElementById('explain-error').textContent = 'Connection failed. Is Ollama running?';
+        });
+}
+
+function closeExplainModal() {
+    document.getElementById('explain-modal').classList.remove('active');
+}
+</script>
+{% endblock %}

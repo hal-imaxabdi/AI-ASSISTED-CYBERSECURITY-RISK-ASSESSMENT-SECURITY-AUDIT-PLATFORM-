@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}User Management — AuditShield{% endblock %}
+{% block page_title %}User Management{% endblock %}
+{% block content %}
+
+<div class="page-layout">
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Create New User</h3>
+        </div>
+        <div class="panel-body">
+            <form method="POST" class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" name="full_name" class="form-input" required placeholder="John Smith">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" name="username" class="form-input" required placeholder="jsmith">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-input" placeholder="jsmith@university.edu">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-input" required placeholder="Min. 8 characters">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Role</label>
+                    <select name="role" class="form-input">
+                        <option value="admin">Admin</option>
+                        <option value="auditor">Auditor</option>
+                        <option value="auditee">Auditee</option>
+                    </select>
+                </div>
+                <div class="form-group form-full">
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h3>All Users</h3>
+            <span class="count-badge">{{ users|length }}</span>
+        </div>
+        <div class="panel-body">
+            <table class="data-table">
+                <thead>
+                    <tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u['full_name'] or '—' }}</td>
+                        <td><code>{{ u['username'] }}</code></td>
+                        <td>{{ u['email'] or '—' }}</td>
+                        <td><span class="role-tag {{ u['role'] }}">{{ u['role'].title() }}</span></td>
+                        <td class="text-muted">{{ u['created_at'][:10] }}</td>
+                        <td>
+                            {% if u['id'] != session.user_id %}
+                            <form method="POST" action="{{ url_for('delete_user', uid=u['id']) }}" onsubmit="return confirm('Delete this user?')">
+                                <button type="submit" class="btn-icon danger">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted" style="font-size:0.75rem;">You</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

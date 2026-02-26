@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}AI Vulnerability Explainer — AuditShield{% endblock %}
+{% block page_title %}AI Vulnerability Explainer{% endblock %}
+{% block content %}
+
+<div class="ai-hero">
+    <div class="ai-hero-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+    </div>
+    <div>
+        <h2 class="ai-hero-title">AI Vulnerability Explainer</h2>
+        <p class="ai-hero-sub">Powered by Ollama — Select a vulnerability to get an AI-generated audit-grade explanation, risk analysis, and NIST CSF control mapping.</p>
+    </div>
+    <div class="ai-badge">phi3:mini</div>
+</div>
+
+<div class="page-layout">
+    <div class="panel">
+        <div class="panel-header"><h3>Select Vulnerability</h3></div>
+        <div class="panel-body">
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">Vulnerability from Register</label>
+                    <select name="vuln_id" class="form-input" required>
+                        <option value="">— Select a vulnerability —</option>
+                        {% for v in vulns %}
+                        <option value="{{ v['id'] }}" {% if selected_vuln and selected_vuln['id'] == v['id'] %}selected{% endif %}>
+                            [{{ v['risk_level'] }}] {{ v['vuln_name'] }} — {{ v['asset_name'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary" id="explain-btn">
+                    <span id="explain-text">Generate AI Explanation</span>
+                </button>
+            </form>
+
+            {% if not vulns %}
+            <div class="info-box info-yellow" style="margin-top:1rem;">
+                No vulnerabilities found. Please <a href="{{ url_for('vulnerabilities') }}">add vulnerabilities</a> first.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if selected_vuln %}
+    <div class="panel">
+        <div class="panel-header"><h3>Vulnerability Details</h3></div>
+        <div class="panel-body">
+            <div class="vuln-detail-grid">
+                <div class="detail-row"><span class="detail-key">Name:</span><strong>{{ selected_vuln['vuln_name'] }}</strong></div>
+                <div class="detail-row"><span class="detail-key">Code:</span><code>{{ selected_vuln['vuln_code'] }}</code></div>
+                <div class="detail-row"><span class="detail-key">Asset:</span>{{ selected_vuln['asset_name'] }}</div>
+                <div class="detail-row"><span class="detail-key">Category:</span>{{ selected_vuln['category'] }}</div>
+                <div class="detail-row">
+                    <span class="detail-key">Risk:</span>
+                    <span class="badge badge-{{ selected_vuln['risk_level']|lower }}">{{ selected_vuln['risk_level'] }}</span>
+                    <span style="margin-left:0.5rem;">Score: {{ selected_vuln['risk_score'] }} (L{{ selected_vuln['likelihood'] }} × I{{ selected_vuln['impact'] }})</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="panel">
+        <div class="panel-body">
+            <div class="info-box info-red">
+                <strong>AI Service Unavailable</strong><br>
+                {{ error }}<br><br>
+                <strong>To enable AI features:</strong><br>
+                1. Make sure Ollama is running: open a terminal and run <code>ollama serve</code><br>
+                2. Confirm phi3:mini is installed: <code>ollama list</code><br>
+                3. If not listed, install it: <code>ollama pull phi3:mini</code><br>
+                4. Retry this page
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if explanation %}
+    <div class="panel">
+        <div class="panel-header">
+            <h3>AI Analysis</h3>
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+                {% if from_cache %}
+                <span style="background:#f0fdf4;color:#16a34a;padding:2px 10px;border-radius:20px;font-size:0.72rem;font-weight:600;">⚡ Cached result</span>
+                {% endif %}
+                <span class="ai-badge-sm">phi3:mini</span>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="ai-explanation">{{ explanation | replace('\n', '<br>') | safe }}</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.querySelector('form')?.addEventListener('submit', function() {
+    document.getElementById('explain-btn').disabled = true;
+    document.getElementById('explain-text').textContent = 'Generating...';
+});
+</script>
+{% endblock %}

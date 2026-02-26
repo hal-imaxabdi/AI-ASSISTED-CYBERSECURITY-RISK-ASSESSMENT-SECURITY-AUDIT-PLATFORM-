@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Evidence — AuditShield{% endblock %}
+{% block page_title %}Evidence Management{% endblock %}
+{% block content %}
+
+<div class="page-layout">
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Control Information</h3>
+        </div>
+        <div class="panel-body">
+            <div class="detail-row"><span class="detail-key">Control ID:</span><code>{{ control['control_id'] }}</code></div>
+            <div class="detail-row"><span class="detail-key">Function:</span>{{ control['function_name'] }}</div>
+            <div class="detail-row"><span class="detail-key">Category:</span>{{ control['category'] }}</div>
+            <div class="detail-row"><span class="detail-key">Description:</span>{{ control['description'] }}</div>
+            {% if audit_result %}
+            <div class="detail-row"><span class="detail-key">Status:</span>
+                <span class="status-badge status-{{ audit_result['status']|lower|replace(' ','-') }}">{{ audit_result['status'] }}</span>
+            </div>
+            {% else %}
+            <div class="info-box info-yellow" style="margin-top:1rem;">
+                This control has not been assessed yet. Please assess it in the <a href="{{ url_for('audit_checklist') }}">Audit Checklist</a> before uploading evidence.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if audit_result and session.get('role') in ['admin','auditor'] %}
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Upload Evidence</h3>
+        </div>
+        <div class="panel-body">
+            <form method="POST" enctype="multipart/form-data" class="upload-form">
+                <div class="upload-zone" id="upload-zone">
+                    <input type="file" name="file" id="file-input" class="file-input" accept=".pdf,.png,.jpg,.jpeg,.txt,.docx,.xlsx,.json,.conf">
+                    <label for="file-input" class="upload-label">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span id="upload-text">Click to select or drag & drop a file</span>
+                        <span class="upload-hint">PDF, PNG, JPG, DOCX, XLSX, TXT, JSON, CONF (max 16MB)</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top:1rem;">Upload Evidence</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Evidence Files</h3>
+            <span class="count-badge">{{ evidence_files|length }}</span>
+        </div>
+        <div class="panel-body">
+            {% if evidence_files %}
+            <div class="evidence-grid">
+                {% for ev in evidence_files %}
+                <div class="evidence-card">
+                    <div class="evidence-icon">
+                        {% if ev['file_type'] in ['png','jpg','jpeg'] %}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        {% elif ev['file_type'] == 'pdf' %}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        {% else %}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>
+                        {% endif %}
+                    </div>
+                    <div class="evidence-info">
+                        <div class="evidence-name">{{ ev['original_name'] }}</div>
+                        <div class="text-muted" style="font-size:0.75rem;">
+                            Uploaded by {{ ev['full_name'] or 'Unknown' }} · {{ ev['uploaded_at'][:10] }}
+                        </div>
+                    </div>
+                    <div class="evidence-actions">
+                        <a href="{{ url_for('static', filename='uploads/' + ev['filename']) }}" target="_blank" class="btn btn-sm btn-outline">View</a>
+                        {% if session.get('role') in ['admin','auditor'] %}
+                        <form method="POST" action="{{ url_for('delete_evidence', eid=ev['id']) }}" onsubmit="return confirm('Delete this evidence?')">
+                            <button type="submit" class="btn-icon danger">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>No evidence uploaded for this control yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+        <a href="{{ url_for('audit_checklist') }}" class="btn btn-outline">← Back to Checklist</a>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+const fileInput = document.getElementById('file-input');
+if (fileInput) {
+    fileInput.addEventListener('change', function() {
+        const name = this.files[0]?.name || 'No file selected';
+        document.getElementById('upload-text').textContent = name;
+    });
+}
+</script>
+{% endblock %}

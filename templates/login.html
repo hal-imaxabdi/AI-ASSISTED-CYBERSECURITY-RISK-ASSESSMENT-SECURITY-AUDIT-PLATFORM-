@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuditShield — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="login-page">
+    <div class="login-split">
+        <div class="login-left">
+            <div class="login-left-content">
+                <div class="login-brand">
+                    <div class="brand-icon large">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L3 7V12C3 16.5 7 20.7 12 22C17 20.7 21 16.5 21 12V7L12 2Z"/>
+                        </svg>
+                    </div>
+                    <span>AuditShield</span>
+                </div>
+                <h1 class="login-headline">
+                    Cybersecurity<br>
+                    <em>Audit Platform</em>
+                </h1>
+                <p class="login-sub">NIST Cybersecurity Framework 2.0 compliance auditing for university IT systems.</p>
+                <div class="login-features">
+                    <div class="login-feature">
+                        <span class="feature-dot identify"></span>
+                        <span>Identify · Protect · Detect</span>
+                    </div>
+                    <div class="login-feature">
+                        <span class="feature-dot respond"></span>
+                        <span>Respond · Recover</span>
+                    </div>
+                    <div class="login-feature">
+                        <span class="feature-dot ai"></span>
+                        <span>AI-Powered Vulnerability Analysis</span>
+                    </div>
+                </div>
+            </div>
+            <div class="login-pattern"></div>
+        </div>
+
+        <div class="login-right">
+            <div class="login-form-wrap">
+                <div class="login-form-header">
+                    <h2>Welcome back</h2>
+                    <p>Sign in to your audit workspace</p>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}" style="margin-bottom:1rem;">
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <form method="POST" class="login-form">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" name="username" class="form-input" placeholder="Enter username" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" name="password" class="form-input" placeholder="Enter password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                </form>
+
+                <div class="login-credentials">
+                    <div class="creds-title">Demo Accounts</div>
+                    <div class="creds-grid">
+                        <div class="cred-item">
+                            <span class="role-tag admin">Admin</span>
+                            <span>admin / admin123</span>
+                        </div>
+                        <div class="cred-item">
+                            <span class="role-tag auditor">Auditor</span>
+                            <span>auditor / auditor123</span>
+                        </div>
+                        <div class="cred-item">
+                            <span class="role-tag auditee">Auditee</span>
+                            <span>auditee / auditee123</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Asset Inventory — AuditShield{% endblock %}
+{% block page_title %}Asset Inventory{% endblock %}
+{% block content %}
+
+{% if session.get('role') in ['admin','auditor'] %}
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header">
+        <h3>Register New Asset</h3>
+    </div>
+    <div class="panel-body">
+        <form method="POST" class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Asset Name</label>
+                <input type="text" name="name" class="form-input" required placeholder="Student Information System">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Asset Type</label>
+                <select name="asset_type" class="form-input">
+                    <option>Server</option>
+                    <option>Database</option>
+                    <option>Web Application</option>
+                    <option>Network Device</option>
+                    <option>Workstation</option>
+                    <option>Cloud Service</option>
+                    <option>IoT Device</option>
+                    <option>Software</option>
+                    <option>Data/Information</option>
+                    <option>Physical</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Asset Owner</label>
+                <input type="text" name="owner" class="form-input" placeholder="IT Department">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Location</label>
+                <input type="text" name="location" class="form-input" placeholder="Data Center / Cloud / Building A">
+            </div>
+            <div class="form-group form-full">
+                <label class="form-label">Description</label>
+                <input type="text" name="description" class="form-input" placeholder="Brief description of the asset...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Confidentiality (C) <span class="cia-hint">1–5</span></label>
+                <input type="number" name="confidentiality" class="form-input" min="1" max="5" value="3" id="c-val" oninput="updateCIA()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Integrity (I) <span class="cia-hint">1–5</span></label>
+                <input type="number" name="integrity" class="form-input" min="1" max="5" value="3" id="i-val" oninput="updateCIA()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Availability (A) <span class="cia-hint">1–5</span></label>
+                <input type="number" name="availability" class="form-input" min="1" max="5" value="3" id="a-val" oninput="updateCIA()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Criticality Score</label>
+                <div class="cia-preview" id="cia-preview">3.00</div>
+                <div class="cia-formula">= avg(C,I,A) × max(C,I,A) / 5</div>
+            </div>
+            <div class="form-group form-full">
+                <button type="submit" class="btn btn-primary">Register Asset</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="panel">
+    <div class="panel-header">
+        <h3>Asset Register</h3>
+        <span class="count-badge">{{ assets|length }} assets</span>
+    </div>
+    <div class="panel-body">
+        {% if assets %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Asset Name</th>
+                    <th>Type</th>
+                    <th>Owner</th>
+                    <th>Location</th>
+                    <th>C</th><th>I</th><th>A</th>
+                    <th>Criticality</th>
+                    {% if session.get('role') in ['admin','auditor'] %}<th>Actions</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in assets %}
+                <tr>
+                    <td>
+                        <div class="asset-name">{{ a['name'] }}</div>
+                        <div class="text-muted" style="font-size:0.75rem;">{{ a['description'] or '' }}</div>
+                    </td>
+                    <td><span class="tag">{{ a['asset_type'] }}</span></td>
+                    <td>{{ a['owner'] or '—' }}</td>
+                    <td>{{ a['location'] or '—' }}</td>
+                    <td class="center">{{ a['confidentiality'] }}</td>
+                    <td class="center">{{ a['integrity'] }}</td>
+                    <td class="center">{{ a['availability'] }}</td>
+                    <td>
+                        {% set score = a['criticality_score'] %}
+                        <div class="criticality-display">
+                            <span class="criticality-score {% if score >= 4 %}crit-high{% elif score >= 2.5 %}crit-med{% else %}crit-low{% endif %}">{{ '%.2f'|format(score) }}</span>
+                        </div>
+                    </td>
+                    {% if session.get('role') in ['admin','auditor'] %}
+                    <td>
+                        <form method="POST" action="{{ url_for('delete_asset', aid=a['id']) }}" onsubmit="return confirm('Delete this asset and its vulnerabilities?')">
+                            <button type="submit" class="btn-icon danger">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                            </button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <p>No assets registered yet. Add your first asset above.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function updateCIA() {
+    const c = parseFloat(document.getElementById('c-val').value) || 1;
+    const i = parseFloat(document.getElementById('i-val').value) || 1;
+    const a = parseFloat(document.getElementById('a-val').value) || 1;
+    const avg = (c + i + a) / 3;
+    const maxVal = Math.max(c, i, a);
+    const score = (avg * (maxVal / 5)).toFixed(2);
+    document.getElementById('cia-preview').textContent = score;
+}
+</script>
+{% endblock %}

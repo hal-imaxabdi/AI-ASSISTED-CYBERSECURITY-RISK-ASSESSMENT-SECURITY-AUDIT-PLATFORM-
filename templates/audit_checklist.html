@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Audit Checklist — AuditShield{% endblock %}
+{% block page_title %}Control Audit Checklist — NIST CSF{% endblock %}
+{% block content %}
+
+<div class="compliance-banner">
+    <div class="compliance-banner-item">
+        <div class="cb-value">{{ compliance_pct }}%</div>
+        <div class="cb-label">Compliance Score</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value green">{{ compliant }}</div>
+        <div class="cb-label">Compliant</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value yellow">{{ partial }}</div>
+        <div class="cb-label">Partially Compliant</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value red">{{ non_compliant }}</div>
+        <div class="cb-label">Non Compliant</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value muted">{{ na }}</div>
+        <div class="cb-label">Not Applicable</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value muted">{{ total }}</div>
+        <div class="cb-label">Total Controls</div>
+    </div>
+</div>
+
+{% set function_colors = {'Identify': '#6366f1', 'Protect': '#0ea5e9', 'Detect': '#f59e0b', 'Respond': '#ef4444', 'Recover': '#22c55e'} %}
+
+{% for function_name, categories in grouped.items() %}
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header function-header" style="border-left: 4px solid {{ function_colors.get(function_name, '#6b7280') }}">
+        <div>
+            <h3>{{ function_name }}</h3>
+            <span class="panel-sub">NIST CSF Core Function</span>
+        </div>
+        <div class="function-stats">
+            {% set fn_controls = [] %}
+            {% set fn_compliant = [] %}
+            {% for cat, ctrl_list in categories.items() %}
+                {% for ctrl, result in ctrl_list %}
+                    {% set _ = fn_controls.append(1) %}
+                    {% if result and result['status'] == 'Compliant' %}{% set _ = fn_compliant.append(1) %}{% endif %}
+                {% endfor %}
+            {% endfor %}
+            <span>{{ fn_compliant|length }}/{{ fn_controls|length }} Compliant</span>
+        </div>
+    </div>
+    <div class="panel-body" style="padding:0;">
+        {% for category, ctrl_list in categories.items() %}
+        <div class="checklist-category">
+            <div class="category-header">{{ category }}</div>
+            {% for ctrl, result in ctrl_list %}
+            <div class="checklist-item {% if result %}status-{{ result['status']|lower|replace(' ', '-') }}{% endif %}">
+                <div class="checklist-left">
+                    <div class="ctrl-id">{{ ctrl['control_id'] }}</div>
+                    <div class="ctrl-body">
+                        <div class="ctrl-subcategory">{{ ctrl['subcategory'] }}</div>
+                        <div class="ctrl-description">{{ ctrl['description'] }}</div>
+                        {% if result and result['notes'] %}
+                        <div class="ctrl-notes">📝 {{ result['notes'] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="checklist-right">
+                    {% if result %}
+                    <span class="status-badge status-{{ result['status']|lower|replace(' ','-') }}">{{ result['status'] }}</span>
+                    {% else %}
+                    <span class="status-badge status-not-assessed">Not Assessed</span>
+                    {% endif %}
+                    <div class="checklist-actions">
+                        {% if session.get('role') in ['admin','auditor'] %}
+                        <button class="btn btn-sm btn-outline" onclick="openModal({{ ctrl['id'] }}, '{{ ctrl['control_id'] }}', '{{ ctrl['description']|replace("'","\'") }}', '{{ result['status'] if result else '' }}', '{{ result['notes'] if result else '' }}')">
+                            Assess
+                        </button>
+                        {% endif %}
+                        <a href="{{ url_for('evidence', control_id=ctrl['id']) }}" class="btn btn-sm btn-ghost">
+                            Evidence
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% if session.get('role') in ['admin','auditor'] %}
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>Assess Control</h3>
+            <button onclick="closeModal()" class="modal-close">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-ctrl-id" id="modal-ctrl-id"></div>
+            <div class="modal-ctrl-desc" id="modal-ctrl-desc"></div>
+            <form method="POST" id="assess-form">
+                <input type="hidden" name="control_id" id="modal-control-id">
+                <div class="form-group">
+                    <label class="form-label">Compliance Status</label>
+                    <div class="status-options">
+                        {% for status in ['Compliant','Partially Compliant','Non Compliant','Not Applicable'] %}
+                        <label class="status-option">
+                            <input type="radio" name="status" value="{{ status }}" id="status-{{ loop.index }}">
+                            <span class="status-option-label status-{{ status|lower|replace(' ','-') }}">{{ status }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Auditor Notes</label>
+                    <textarea name="notes" class="form-input" rows="3" id="modal-notes" placeholder="Document evidence, observations, or recommendations..."></textarea>
+                </div>
+                <div style="display:flex;gap:1rem;">
+                    <button type="submit" class="btn btn-primary">Save Assessment</button>
+                    <button type="button" onclick="closeModal()" class="btn btn-outline">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function openModal(controlId, ctrlCode, ctrlDesc, currentStatus, currentNotes) {
+    document.getElementById('modal-control-id').value = controlId;
+    document.getElementById('modal-ctrl-id').textContent = ctrlCode;
+    document.getElementById('modal-ctrl-desc').textContent = ctrlDesc;
+    document.getElementById('modal-notes').value = currentNotes;
+    if (currentStatus) {
+        const radios = document.querySelectorAll('input[name="status"]');
+        radios.forEach(r => { r.checked = r.value === currentStatus; });
+    }
+    document.getElementById('modal-overlay').classList.add('active');
+}
+function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('active');
+}
+</script>
+{% endblock %}

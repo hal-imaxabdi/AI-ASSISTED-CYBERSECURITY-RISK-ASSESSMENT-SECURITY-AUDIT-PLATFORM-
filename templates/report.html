@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Audit Report — AuditShield{% endblock %}
+{% block page_title %}Audit Report{% endblock %}
+{% block content %}
+
+<div class="report-toolbar">
+    <a href="{{ url_for('export_report_pdf') }}" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF Report
+    </a>
+    <button onclick="window.print()" class="btn btn-outline">Print</button>
+</div>
+
+<div class="report-doc" id="report-content">
+    <div class="report-cover">
+        <div class="report-cover-top">
+            <div class="report-logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7V12C3 16.5 7 20.7 12 22C17 20.7 21 16.5 21 12V7L12 2Z"/></svg>
+                AuditShield
+            </div>
+            <div class="report-framework-tag">NIST Cybersecurity Framework 2.0</div>
+        </div>
+        <h1 class="report-title">Cybersecurity Audit Report</h1>
+        <div class="report-org">{{ org.name if org else 'University IT System' }}</div>
+        <div class="report-date">{{ report_date }}</div>
+        <div class="report-opinion-block opinion-{{ opinion_class }}">
+            <div class="report-opinion-label">Final Audit Opinion</div>
+            <div class="report-opinion-value">{{ final_opinion }}</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">1. Executive Summary</h2>
+        <p>This cybersecurity audit was conducted on <strong>{{ org.name if org else 'the University IT System' }}</strong> following the <strong>NIST Cybersecurity Framework (CSF) 2.0</strong>. The audit assessed the organization's information security posture across the five core functions: Identify, Protect, Detect, Respond, and Recover.</p>
+        <p>The overall compliance score achieved was <strong>{{ compliance_pct }}%</strong> based on {{ assessed }} assessed controls out of a total of {{ (compliant + partial + non_compliant + (assessed - compliant - partial - non_compliant)) }} applicable controls. A total of <strong>{{ findings|length }} audit findings</strong> were identified, including {{ critical_count }} critical-severity and {{ high_count }} high-severity risk items.</p>
+        <p>Based on the assessment results, the final audit opinion is: <strong>{{ final_opinion }}</strong>.</p>
+        <div class="report-kpi-row">
+            <div class="r-kpi">
+                <div class="r-kpi-val">{{ compliance_pct }}%</div>
+                <div class="r-kpi-lbl">Compliance</div>
+            </div>
+            <div class="r-kpi">
+                <div class="r-kpi-val">{{ assets|length }}</div>
+                <div class="r-kpi-lbl">Assets</div>
+            </div>
+            <div class="r-kpi">
+                <div class="r-kpi-val">{{ vulns|length }}</div>
+                <div class="r-kpi-lbl">Vulnerabilities</div>
+            </div>
+            <div class="r-kpi">
+                <div class="r-kpi-val">{{ findings|length }}</div>
+                <div class="r-kpi-lbl">Findings</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">2. Scope</h2>
+        <p>This audit covers the IT infrastructure, systems, and processes of <strong>{{ org.name if org else 'the organization' }}</strong>. The audit scope encompasses all registered information assets, their associated threats and vulnerabilities, and the applicable NIST CSF controls.</p>
+        <div class="report-detail-box">
+            <div class="detail-row"><span class="detail-key">Organization:</span>{{ org.name if org else 'N/A' }}</div>
+            <div class="detail-row"><span class="detail-key">Industry:</span>{{ (org.industry or 'N/A').title() if org else 'N/A' }}</div>
+            <div class="detail-row"><span class="detail-key">Exposure Level:</span>{{ (org.exposure_level or 'N/A') if org else 'N/A' }}</div>
+            <div class="detail-row"><span class="detail-key">Audit Date:</span>{{ report_date }}</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">3. Methodology</h2>
+        <p>This audit follows the <strong>NIST Cybersecurity Framework (CSF) 2.0</strong> structured workflow:</p>
+        <ol class="report-list">
+            <li><strong>Asset Inventory:</strong> All information assets were catalogued with CIA (Confidentiality, Integrity, Availability) ratings to calculate asset criticality scores.</li>
+            <li><strong>Threat & Vulnerability Identification:</strong> OWASP and CWE vulnerabilities were mapped to each asset, with automated likelihood and impact scoring.</li>
+            <li><strong>Risk Assessment:</strong> Risk scores were calculated using the formula: <em>Risk = Likelihood × Impact</em>, classified as Low (1–4), Medium (5–9), High (10–15), or Critical (16–25).</li>
+            <li><strong>Security Control Audit:</strong> Controls were assessed against the NIST CSF core functions using a four-point scale: Compliant, Partially Compliant, Non Compliant, and Not Applicable.</li>
+            <li><strong>Compliance Scoring:</strong> Compliance % = (Compliant Controls ÷ Total Assessed Controls) × 100.</li>
+            <li><strong>Findings Generation:</strong> Audit findings were systematically generated from non-compliant controls and high-risk vulnerabilities.</li>
+        </ol>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">4. Asset Inventory</h2>
+        {% if assets %}
+        <table class="report-table">
+            <thead><tr><th>Asset Name</th><th>Type</th><th>Owner</th><th>C</th><th>I</th><th>A</th><th>Criticality</th></tr></thead>
+            <tbody>
+                {% for a in assets %}
+                <tr>
+                    <td>{{ a['name'] }}</td>
+                    <td>{{ a['asset_type'] }}</td>
+                    <td>{{ a['owner'] or '—' }}</td>
+                    <td>{{ a['confidentiality'] }}</td>
+                    <td>{{ a['integrity'] }}</td>
+                    <td>{{ a['availability'] }}</td>
+                    <td>{{ '%.2f'|format(a['criticality_score']) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No assets registered.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">5. Risk Assessment Results</h2>
+        {% if vulns %}
+        <table class="report-table">
+            <thead><tr><th>Vulnerability</th><th>Asset</th><th>Likelihood</th><th>Impact</th><th>Score</th><th>Level</th></tr></thead>
+            <tbody>
+                {% for v in vulns %}
+                <tr>
+                    <td>{{ v['vuln_name'] }}<br><small>{{ v['vuln_code'] }}</small></td>
+                    <td>{{ v['asset_name'] }}</td>
+                    <td>{{ v['likelihood'] }}</td>
+                    <td>{{ v['impact'] }}</td>
+                    <td><strong>{{ v['risk_score'] }}</strong></td>
+                    <td><span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No risk data available.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">6. Compliance Results</h2>
+        <div class="report-compliance-summary">
+            <div class="rc-item green">{{ compliant }} Compliant</div>
+            <div class="rc-item yellow">{{ partial }} Partially Compliant</div>
+            <div class="rc-item red">{{ non_compliant }} Non Compliant</div>
+            <div class="rc-item muted">{{ assessed - compliant - partial - non_compliant }} Not Assessed</div>
+        </div>
+        <p><strong>Overall Compliance: {{ compliance_pct }}%</strong></p>
+        <table class="report-table">
+            <thead><tr><th>NIST CSF Function</th><th>Total Controls</th><th>Compliant</th><th>Compliance %</th></tr></thead>
+            <tbody>
+                {% for fs in function_stats %}
+                {% set fn_assessed2 = (fs['compliant_c'] or 0) %}
+                {% set fn_pct2 = ((fs['compliant_c'] or 0) / fs['total'] * 100)|round(1) if fs['total'] > 0 else 0 %}
+                <tr>
+                    <td>{{ fs['function_name'] }}</td>
+                    <td>{{ fs['total'] }}</td>
+                    <td>{{ fs['compliant_c'] or 0 }}</td>
+                    <td>{{ fn_pct2 }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">7. Audit Findings</h2>
+        {% if findings %}
+        {% for f in findings %}
+        <div class="report-finding finding-{{ f['risk_level']|lower }}">
+            <div class="rf-header">
+                <span class="badge badge-{{ f['risk_level']|lower }}">{{ f['risk_level'] }}</span>
+                <strong>{{ f['title'] }}</strong>
+                {% if f['control_ref'] %}<code style="font-size:0.75rem;">{{ f['control_ref'] }}</code>{% endif %}
+            </div>
+            <div class="rf-body">
+                <div><strong>Issue:</strong> {{ f['issue'] }}</div>
+                <div><strong>Affected Asset:</strong> {{ f['affected_asset'] or '—' }}</div>
+                <div><strong>Recommendation:</strong> {{ f['recommendation'] }}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted">No findings recorded.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">8. AI Recommendations</h2>
+        {% if ai_recs %}
+        {% for rec in ai_recs %}
+        <div class="report-finding finding-{{ rec['level']|lower }}">
+            <div class="rf-header">
+                <span class="badge badge-{{ rec['level']|lower }}">{{ rec['level'] }}</span>
+                <strong>{{ rec['title'] }}</strong>
+            </div>
+            <div class="rf-body">{{ rec['body'] }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted">No AI recommendations available. Use the AI Explainer on identified vulnerabilities to generate recommendations.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">9. Audit Evidence</h2>
+        {% if evidence_files %}
+        {% set ns = namespace(last_ctrl='') %}
+        {% for ev in evidence_files %}
+            {% if ev['ctrl_ref'] != ns.last_ctrl %}
+                {% if not loop.first %}</div>{% endif %}
+                <div class="report-evidence-group">
+                <div class="evidence-group-header">
+                    <code>{{ ev['ctrl_ref'] }}</code>
+                    <span class="status-badge status-{{ ev['ctrl_status']|lower|replace(' ','-') }}">{{ ev['ctrl_status'] }}</span>
+                    <span class="evidence-ctrl-desc">{{ ev['ctrl_desc'] }}</span>
+                </div>
+                {% set ns.last_ctrl = ev['ctrl_ref'] %}
+            {% endif %}
+            <div class="evidence-item">
+                {% if ev['file_type'] in ['png','jpg','jpeg'] %}
+                <img src="{{ url_for('static', filename='uploads/' + ev['filename']) }}" class="evidence-img" alt="{{ ev['original_name'] }}">
+                {% endif %}
+                <div class="evidence-meta">
+                    <strong>{{ ev['original_name'] }}</strong>
+                    <span class="text-muted">— {{ ev['file_type']|upper }} · Uploaded by {{ ev['full_name'] or 'Unknown' }} · {{ ev['uploaded_at'][:10] }}</span>
+                    {% if ev['file_type'] not in ['png','jpg','jpeg'] %}
+                    <a href="{{ url_for('static', filename='uploads/' + ev['filename']) }}" target="_blank" class="btn btn-sm btn-outline" style="margin-left:0.5rem;">View File</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+        {% if evidence_files %}</div>{% endif %}
+        {% else %}
+        <p class="text-muted">No evidence files have been uploaded for this audit.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">10. Final Opinion</h2>
+        <div class="final-opinion-block opinion-{{ opinion_class }}">
+            <div class="fo-icon">
+                {% if final_opinion == 'Secure' %}✅
+                {% elif final_opinion == 'Acceptable Risk' %}⚠️
+                {% else %}🚨{% endif %}
+            </div>
+            <div>
+                <div class="fo-title">{{ final_opinion }}</div>
+                <div class="fo-desc">
+                    {% if final_opinion == 'Secure' %}
+                    The organization demonstrates a strong security posture with {{ compliance_pct }}% NIST CSF compliance and no critical vulnerabilities. Continued monitoring and improvement is recommended.
+                    {% elif final_opinion == 'Acceptable Risk' %}
+                    The organization shows acceptable security posture with {{ compliance_pct }}% compliance. Identified risks should be addressed in a structured remediation plan within 90 days.
+                    {% else %}
+                    The organization requires immediate security improvements. With {{ compliance_pct }}% compliance and {{ critical_count }} critical risks identified, prompt action is necessary to protect university systems and data.
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="report-footer">
+        <p>Generated by AuditShield — NIST CSF 2.0 Cybersecurity Audit Platform · {{ report_date }}</p>
+    </div>
+</div>
+
+{% endblock %}

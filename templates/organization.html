@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Organization Profile — AuditShield{% endblock %}
+{% block page_title %}Organization Profile{% endblock %}
+{% block content %}
+
+<div class="page-layout">
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Organization Details</h3>
+        </div>
+        <div class="panel-body">
+            <form method="POST" class="form-grid">
+                <div class="form-group form-full">
+                    <label class="form-label">Organization Name</label>
+                    <input type="text" name="name" class="form-input" required placeholder="University of Technology" value="{{ org.name if org else '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Industry Sector</label>
+                    <select name="industry" class="form-input">
+                        {% for opt in ['education','healthcare','finance','government','technology','manufacturing','other'] %}
+                        <option value="{{ opt }}" {% if org and org.industry == opt %}selected{% endif %}>{{ opt.title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Organization Size</label>
+                    <select name="size" class="form-input">
+                        <option value="small" {% if org and org.size == 'small' %}selected{% endif %}>Small (< 100 staff)</option>
+                        <option value="medium" {% if org and org.size == 'medium' %}selected{% endif %}>Medium (100–1000 staff)</option>
+                        <option value="large" {% if org and org.size == 'large' %}selected{% endif %}>Large (> 1000 staff)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contact Email</label>
+                    <input type="email" name="contact_email" class="form-input" placeholder="it@university.edu" value="{{ org.contact_email if org else '' }}">
+                </div>
+                <div class="form-group form-full">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-input" rows="3" placeholder="Describe the organization and audit scope...">{{ org.description if org else '' }}</textarea>
+                </div>
+                {% if session.get('role') in ['admin','auditor'] %}
+                <div class="form-group form-full">
+                    <button type="submit" class="btn btn-primary">Save Organization Profile</button>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    {% if org %}
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Exposure Assessment</h3>
+        </div>
+        <div class="panel-body">
+            <div class="exposure-display">
+                <div class="exposure-level exposure-{{ org.exposure_level|lower }}">
+                    <div class="exposure-icon">
+                        {% if org.exposure_level == 'High' %}
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        {% elif org.exposure_level == 'Medium' %}
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        {% else %}
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="exposure-label">Exposure Level</div>
+                        <div class="exposure-value">{{ org.exposure_level }}</div>
+                    </div>
+                </div>
+                <div class="exposure-details">
+                    <div class="detail-row"><span class="detail-key">Industry:</span><span>{{ org.industry.title() }}</span></div>
+                    <div class="detail-row"><span class="detail-key">Size:</span><span>{{ org.size.title() }}</span></div>
+                    <div class="detail-row"><span class="detail-key">Scope:</span><span>University IT Systems — Full NIST CSF Audit</span></div>
+                    <div class="detail-row"><span class="detail-key">Framework:</span><span>NIST Cybersecurity Framework 2.0</span></div>
+                </div>
+            </div>
+            <div class="info-box info-blue" style="margin-top:1rem;">
+                <strong>Exposure Logic:</strong> Education sector with large staff size results in <strong>{{ org.exposure_level }} exposure</strong>. This guides the depth of controls assessment required.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

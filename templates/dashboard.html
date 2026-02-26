@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AuditShield{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <div class="kpi-value">{{ assets_count }}</div>
+        <div class="kpi-label">Registered Assets</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon orange"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
+        <div class="kpi-value">{{ vulns_count }}</div>
+        <div class="kpi-label">Vulnerabilities Mapped</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon {% if compliance_pct >= 80 %}green{% elif compliance_pct >= 60 %}yellow{% else %}red{% endif %}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="kpi-value">{{ compliance_pct }}%</div>
+        <div class="kpi-label">Compliance Score</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+        <div class="kpi-value">{{ critical_vulns }}</div>
+        <div class="kpi-label">Critical Risks</div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="panel">
+        <div class="panel-header">
+            <h3>Risk Distribution</h3>
+        </div>
+        <div class="panel-body">
+            {% set risk_data = {} %}
+            {% for r in risk_distribution %}{% set _ = risk_data.update({r['risk_level']: r['cnt']}) %}{% endfor %}
+            <div class="risk-bars">
+                {% for level, color in [('Critical','#ef4444'),('High','#f97316'),('Medium','#eab308'),('Low','#22c55e')] %}
+                {% set cnt = risk_data.get(level, 0) %}
+                <div class="risk-bar-row">
+                    <span class="risk-bar-label">{{ level }}</span>
+                    <div class="risk-bar-track">
+                        <div class="risk-bar-fill" style="width:{% if vulns_count > 0 %}{{ (cnt / vulns_count * 100)|round(1) }}{% else %}0{% endif %}%; background:{{ color }}"></div>
+                    </div>
+                    <span class="risk-bar-count">{{ cnt }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% if not vulns_count %}
+            <div class="empty-state-small">No vulnerability data yet. Add assets and map vulnerabilities.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h3>NIST CSF Function Coverage</h3>
+        </div>
+        <div class="panel-body">
+            {% if function_compliance %}
+            {% for fc in function_compliance %}
+            {% set pct = ((fc['compliant_count'] or 0) / fc['assessed'] * 100)|round(1) if fc['assessed'] else 0 %}
+            <div class="function-row">
+                <div class="function-info">
+                    <span class="function-name">{{ fc['function_name'] }}</span>
+                    <span class="function-pct">{{ pct }}%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill {% if pct >= 80 %}fill-green{% elif pct >= 60 %}fill-yellow{% else %}fill-red{% endif %}" style="width:{{ pct }}%"></div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state-small">Complete audit checklist to see function coverage.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="panel span-2">
+        <div class="panel-header">
+            <h3>Recent Findings</h3>
+            <a href="{{ url_for('findings') }}" class="panel-link">View all →</a>
+        </div>
+        <div class="panel-body">
+            {% if recent_findings %}
+            <table class="data-table">
+                <thead>
+                    <tr><th>Finding</th><th>Risk</th><th>Affected Asset</th><th>Date</th></tr>
+                </thead>
+                <tbody>
+                    {% for f in recent_findings %}
+                    <tr>
+                        <td>{{ f['title'] }}</td>
+                        <td><span class="badge badge-{{ f['risk_level']|lower }}">{{ f['risk_level'] }}</span></td>
+                        <td>{{ f['affected_asset'] }}</td>
+                        <td class="text-muted">{{ f['created_at'][:10] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state-small">No findings yet. Run vulnerability assessment and generate findings.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="workflow-strip">
+    <div class="wf-title">Audit Workflow</div>
+    <div class="wf-steps">
+        <a href="{{ url_for('organization') }}" class="wf-step {% if org %}done{% endif %}">
+            <div class="wf-step-num">1</div>
+            <div class="wf-step-label">Organization Profile</div>
+        </a>
+        <div class="wf-arrow">→</div>
+        <a href="{{ url_for('assets') }}" class="wf-step {% if assets_count > 0 %}done{% endif %}">
+            <div class="wf-step-num">2</div>
+            <div class="wf-step-label">Asset Inventory</div>
+        </a>
+        <div class="wf-arrow">→</div>
+        <a href="{{ url_for('vulnerabilities') }}" class="wf-step {% if vulns_count > 0 %}done{% endif %}">
+            <div class="wf-step-num">3</div>
+            <div class="wf-step-label">Vulnerability Mapping</div>
+        </a>
+        <div class="wf-arrow">→</div>
+        <a href="{{ url_for('risk_assessment') }}" class="wf-step {% if vulns_count > 0 %}done{% endif %}">
+            <div class="wf-step-num">4</div>
+            <div class="wf-step-label">Risk Assessment</div>
+        </a>
+        <div class="wf-arrow">→</div>
+        <a href="{{ url_for('audit_checklist') }}" class="wf-step {% if assessed > 0 %}done{% endif %}">
+            <div class="wf-step-num">5</div>
+            <div class="wf-step-label">Audit Checklist</div>
+        </a>
+        <div class="wf-arrow">→</div>
+        <a href="{{ url_for('findings') }}" class="wf-step {% if findings_count > 0 %}done{% endif %}">
+            <div class="wf-step-num">6</div>
+            <div class="wf-step-label">Findings</div>
+        </a>
+        <div class="wf-arrow">→</div>
+        <a href="{{ url_for('report') }}" class="wf-step">
+            <div class="wf-step-num">7</div>
+            <div class="wf-step-label">Audit Report</div>
+        </a>
+    </div>
+</div>
+
+{% endblock %}

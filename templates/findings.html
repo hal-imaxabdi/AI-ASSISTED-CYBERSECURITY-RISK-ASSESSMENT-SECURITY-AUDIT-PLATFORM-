@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Findings — AuditShield{% endblock %}
+{% block page_title %}Audit Findings{% endblock %}
+{% block content %}
+
+<div class="findings-toolbar">
+    <form method="POST" style="display:inline;">
+        <input type="hidden" name="action" value="generate">
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Auto-generate findings from non-compliant controls and high-risk vulnerabilities?')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            Auto-Generate Findings
+        </button>
+    </form>
+    <button class="btn btn-outline" onclick="document.getElementById('add-finding-form').classList.toggle('hidden')">
+        + Add Manual Finding
+    </button>
+</div>
+
+<div class="panel hidden" id="add-finding-form" style="margin-bottom:1.5rem;">
+    <div class="panel-header"><h3>Add Manual Finding</h3></div>
+    <div class="panel-body">
+        <form method="POST" class="form-grid">
+            <input type="hidden" name="action" value="add">
+            <div class="form-group form-full">
+                <label class="form-label">Finding Title</label>
+                <input type="text" name="title" class="form-input" required placeholder="e.g., Missing Multi-Factor Authentication">
+            </div>
+            <div class="form-group form-full">
+                <label class="form-label">Issue Description</label>
+                <textarea name="issue" class="form-input" rows="3" required placeholder="Describe the security issue found..."></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Risk Level</label>
+                <select name="risk_level" class="form-input">
+                    <option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Affected Asset</label>
+                <input type="text" name="affected_asset" class="form-input" placeholder="e.g., Student Portal, Network Firewall">
+            </div>
+            <div class="form-group form-full">
+                <label class="form-label">Recommendation</label>
+                <textarea name="recommendation" class="form-input" rows="2" placeholder="Recommended remediation action..."></textarea>
+            </div>
+            <div class="form-group form-full">
+                <button type="submit" class="btn btn-primary">Add Finding</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if findings %}
+<div class="findings-list">
+    {% for f in findings %}
+    <div class="finding-card finding-{{ f['risk_level']|lower }}">
+        <div class="finding-header">
+            <div class="finding-title-row">
+                <span class="badge badge-{{ f['risk_level']|lower }}">{{ f['risk_level'] }}</span>
+                <h4 class="finding-title">{{ f['title'] }}</h4>
+            </div>
+            <div class="finding-meta">
+                {% if f['control_ref'] %}<code class="ctrl-ref">NIST: {{ f['control_ref'] }}</code>{% endif %}
+                {% if f['vuln_ref'] %}<code class="ctrl-ref">CVE/OWASP: {{ f['vuln_ref'] }}</code>{% endif %}
+                <span class="text-muted" style="font-size:0.75rem;">{{ f['created_at'][:10] }}</span>
+            </div>
+        </div>
+        <div class="finding-body">
+            <div class="finding-section">
+                <span class="finding-label">Issue</span>
+                <p>{{ f['issue'] }}</p>
+            </div>
+            <div class="finding-section">
+                <span class="finding-label">Affected Asset</span>
+                <p>{{ f['affected_asset'] or '—' }}</p>
+            </div>
+            <div class="finding-section">
+                <span class="finding-label">Recommendation</span>
+                <p>{{ f['recommendation'] }}</p>
+            </div>
+        </div>
+        <div class="finding-footer">
+            <form method="POST" onsubmit="return confirm('Delete this finding?')">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="finding_id" value="{{ f['id'] }}">
+                <button type="submit" class="btn btn-sm btn-ghost danger-text">Delete</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state" style="margin-top:2rem;">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <p>No findings yet. Click "Auto-Generate Findings" to create findings from non-compliant controls and high-risk vulnerabilities.</p>
+</div>
+{% endif %}
+
+{% endblock %}

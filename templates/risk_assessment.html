@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Risk Assessment — AuditShield{% endblock %}
+{% block page_title %}Risk Assessment Engine{% endblock %}
+{% block content %}
+
+<div class="risk-summary-row">
+    {% for level, color, icon in [('Critical','#ef4444','⬛'),('High','#f97316','🟧'),('Medium','#eab308','🟨'),('Low','#22c55e','🟩')] %}
+    <div class="risk-kpi" style="--rc:{{ color }}">
+        <div class="risk-kpi-value">{{ risk_counts[level] }}</div>
+        <div class="risk-kpi-label">{{ level }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header">
+        <h3>Risk Matrix</h3>
+        <span class="panel-sub">Risk = Likelihood × Impact</span>
+    </div>
+    <div class="panel-body">
+        <div class="risk-matrix-wrap">
+            <div class="risk-matrix">
+                <div class="matrix-yaxis">
+                    <span>Likelihood</span>
+                </div>
+                <div class="matrix-grid">
+                    <div class="matrix-corner"></div>
+                    {% for i in range(1,6) %}
+                    <div class="matrix-col-header">{{ i }}</div>
+                    {% endfor %}
+                    {% for l in range(5,0,-1) %}
+                    <div class="matrix-row-header">{{ l }}</div>
+                    {% for i in range(1,6) %}
+                    {% set score = l * i %}
+                    {% if score <= 4 %}{% set cls = 'cell-low' %}
+                    {% elif score <= 9 %}{% set cls = 'cell-medium' %}
+                    {% elif score <= 15 %}{% set cls = 'cell-high' %}
+                    {% else %}{% set cls = 'cell-critical' %}{% endif %}
+                    <div class="matrix-cell {{ cls }}">
+                        {{ score }}
+                        {% set dots = vulns | selectattr('likelihood','equalto', l) | selectattr('impact','equalto', i) | list %}
+                        {% if dots %}
+                        <span class="matrix-dot">{{ dots|length }}</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+                <div class="matrix-xaxis"><span>Impact →</span></div>
+            </div>
+            <div class="matrix-legend">
+                <div class="legend-item"><span class="legend-box cell-critical"></span>Critical (16–25)</div>
+                <div class="legend-item"><span class="legend-box cell-high"></span>High (10–15)</div>
+                <div class="legend-item"><span class="legend-box cell-medium"></span>Medium (5–9)</div>
+                <div class="legend-item"><span class="legend-box cell-low"></span>Low (1–4)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <h3>Risk Register</h3>
+        <span class="count-badge">{{ vulns|length }} entries</span>
+    </div>
+    <div class="panel-body">
+        {% if vulns %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Vulnerability</th>
+                    <th>Asset</th>
+                    <th>Asset Criticality</th>
+                    <th>Likelihood</th>
+                    <th>Impact</th>
+                    <th>Risk Score</th>
+                    <th>Risk Level</th>
+                    <th>Category</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vulns %}
+                <tr>
+                    <td>
+                        <div>{{ v['vuln_name'] }}</div>
+                        <div><code style="font-size:0.72rem;">{{ v['vuln_code'] }}</code></div>
+                    </td>
+                    <td>{{ v['asset_name'] }}</td>
+                    <td class="center">
+                        <span class="criticality-score {% if v['criticality_score'] >= 4 %}crit-high{% elif v['criticality_score'] >= 2.5 %}crit-med{% else %}crit-low{% endif %}">
+                            {{ '%.2f'|format(v['criticality_score']) }}
+                        </span>
+                    </td>
+                    <td class="center"><div class="score-circle likelihood">{{ v['likelihood'] }}</div></td>
+                    <td class="center"><div class="score-circle impact">{{ v['impact'] }}</div></td>
+                    <td class="center"><strong style="font-size:1.1rem;">{{ v['risk_score'] }}</strong></td>
+                    <td><span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span></td>
+                    <td><span class="tag">{{ v['category'] }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <p>No risk data available. Register assets and map vulnerabilities first.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

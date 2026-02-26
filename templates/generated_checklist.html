@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Auto-Generated Checklist — AuditShield{% endblock %}
+{% block page_title %}Auto-Generated Audit Checklist{% endblock %}
+{% block content %}
+
+<div class="info-box info-blue" style="margin-bottom:1.5rem;">
+    <strong>This checklist was automatically created from your vulnerability selections.</strong>
+    Each item maps directly to a specific vulnerability detected on an asset, with a pre-written verification instruction. Mark each item as you perform the audit.
+</div>
+
+<div class="compliance-banner" style="margin-bottom:1.5rem;">
+    <div class="compliance-banner-item">
+        <div class="cb-value">{{ total }}</div>
+        <div class="cb-label">Total Items</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value green">{{ compliant }}</div>
+        <div class="cb-label">Compliant</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value yellow">{{ partial }}</div>
+        <div class="cb-label">Partially Compliant</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value red">{{ non_compliant }}</div>
+        <div class="cb-label">Non Compliant</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value muted">{{ total - assessed }}</div>
+        <div class="cb-label">Pending</div>
+    </div>
+    <div class="compliance-banner-item">
+        <div class="cb-value {% if pct >= 80 %}green{% elif pct >= 60 %}yellow{% else %}red{% endif %}">{{ pct }}%</div>
+        <div class="cb-label">Compliance</div>
+    </div>
+</div>
+
+{% if grouped %}
+{% for asset_name, items in grouped.items() %}
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header" style="border-left:4px solid var(--primary);">
+        <div>
+            <h3>{{ asset_name }}</h3>
+            <span class="panel-sub">{{ items|length }} checklist items generated from vulnerability selection</span>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-3);">
+            {{ items | selectattr('status','equalto','Compliant') | list | length }} / {{ items|length }} compliant
+        </div>
+    </div>
+    <div class="panel-body" style="padding:0;">
+        {% for item in items %}
+        <div class="checklist-item gen-checklist-item status-{{ item['status']|lower|replace(' ','-') }}">
+            <div class="checklist-left">
+                <div class="ctrl-id">{{ item['vuln_code'] }}</div>
+                <div class="ctrl-body">
+                    <div class="ctrl-subcategory">{{ item['vuln_name'] }}</div>
+                    <div class="ctrl-description" style="margin-bottom:0.4rem;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M9 11l3 3L22 4"/></svg>
+                        <strong>Verify:</strong> {{ item['checklist_item'] }}
+                    </div>
+                    {% if item['nist_ref'] %}
+                    <div style="font-size:0.72rem;color:var(--primary);">NIST CSF Ref: {{ item['nist_ref'] }}</div>
+                    {% endif %}
+                    {% if item['notes'] %}
+                    <div class="ctrl-notes">📝 {{ item['notes'] }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="checklist-right">
+                {% if item['status'] == 'Pending' %}
+                <span class="status-badge status-not-assessed">Pending</span>
+                {% else %}
+                <span class="status-badge status-{{ item['status']|lower|replace(' ','-') }}">{{ item['status'] }}</span>
+                {% endif %}
+                {% if session.get('role') in ['admin','auditor'] %}
+                <button class="btn btn-sm btn-outline" onclick="openGCModal({{ item['id'] }}, '{{ item['vuln_name']|replace("'","\\'") }}', '{{ item['status'] }}', '{{ item['notes']|replace("'","\\'")|replace('"','\\"') }}')">
+                    Assess
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state" style="margin-top:2rem;">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    <p>No auto-generated checklist items yet.</p>
+    <p>Go to <a href="{{ url_for('vulnerabilities') }}">Vulnerabilities</a>, select an asset, and check the vulnerabilities detected. Checklist items will be created automatically.</p>
+</div>
+{% endif %}
+
+<div style="margin-top:1rem;">
+    <a href="{{ url_for('vulnerabilities') }}" class="btn btn-outline">← Back to Vulnerabilities</a>
+    <a href="{{ url_for('audit_checklist') }}" class="btn btn-outline" style="margin-left:0.75rem;">View NIST CSF Framework Checklist →</a>
+</div>
+
+{% if session.get('role') in ['admin','auditor'] %}
+<div class="modal-overlay" id="gc-modal-overlay" onclick="closeGCModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>Assess Checklist Item</h3>
+            <button onclick="closeGCModal()" class="modal-close">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-ctrl-id" id="gc-modal-title"></div>
+            <form method="POST" id="gc-form">
+                <input type="hidden" name="item_id" id="gc-item-id">
+                <div class="form-group" style="margin-bottom:1rem;">
+                    <label class="form-label">Compliance Status</label>
+                    <div class="status-options">
+                        {% for status in ['Compliant','Partially Compliant','Non Compliant','Not Applicable'] %}
+                        <label class="status-option">
+                            <input type="radio" name="status" value="{{ status }}">
+                            <span class="status-option-label status-{{ status|lower|replace(' ','-') }}">{{ status }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:1rem;">
+                    <label class="form-label">Auditor Notes</label>
+                    <textarea name="notes" class="form-input" rows="3" id="gc-notes" placeholder="Document findings or observations..."></textarea>
+                </div>
+                <div style="display:flex;gap:1rem;">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" onclick="closeGCModal()" class="btn btn-outline">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function openGCModal(itemId, title, currentStatus, currentNotes) {
+    document.getElementById('gc-item-id').value = itemId;
+    document.getElementById('gc-modal-title').textContent = title;
+    document.getElementById('gc-notes').value = currentNotes;
+    const radios = document.querySelectorAll('#gc-form input[name="status"]');
+    radios.forEach(r => r.checked = r.value === currentStatus);
+    document.getElementById('gc-modal-overlay').classList.add('active');
+}
+function closeGCModal() {
+    document.getElementById('gc-modal-overlay').classList.remove('active');
+}
+</script>
+{% endblock %}
