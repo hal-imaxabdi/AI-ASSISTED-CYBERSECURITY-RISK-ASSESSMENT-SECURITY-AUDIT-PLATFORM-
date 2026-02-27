@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Risk Assessment Report — AuditShield{% endblock %}
+{% block page_title %}Risk Assessment Report{% endblock %}
+{% block content %}
+
+<div class="report-toolbar">
+    <a href="{{ url_for('export_risk_assessment_pdf') }}" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download PDF
+    </a>
+    <a href="{{ url_for('risk_assessment_report_export') }}" target="_blank" class="btn btn-outline">
+        Print Preview
+    </a>
+</div>
+
+<div class="report-doc">
+    <div class="report-cover">
+        <div class="report-cover-top">
+            <div class="report-logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7V12C3 16.5 7 20.7 12 22C17 20.7 21 16.5 21 12V7L12 2Z"/></svg>
+                AuditShield
+            </div>
+            <div class="report-framework-tag">NIST CSF</div>
+        </div>
+        <h1 class="report-title">Risk Assessment Report</h1>
+        <div class="report-org">{{ org.name if org else 'University IT System' }}</div>
+        <div class="report-date">{{ report_date }}</div>
+        <div class="report-opinion-block opinion-{{ opinion_class }}">
+            <div class="report-opinion-label">Overall Risk Posture</div>
+            <div class="report-opinion-value">{{ risk_posture }}</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">1. Executive Summary</h2>
+        <p>This risk assessment covers <strong>{{ org.name if org else 'the University IT System' }}</strong> using a quantitative likelihood–impact model. A total of <strong>{{ vulns|length }}</strong> risks were evaluated across <strong>{{ assets|length }}</strong> information assets.</p>
+        <div class="report-kpi-row">
+            <div class="r-kpi"><div class="r-kpi-val">{{ vulns|length }}</div><div class="r-kpi-lbl">Total Risks</div></div>
+            <div class="r-kpi"><div class="r-kpi-val" style="color:#dc2626;">{{ risk_counts.Critical }}</div><div class="r-kpi-lbl">Critical</div></div>
+            <div class="r-kpi"><div class="r-kpi-val" style="color:#ea580c;">{{ risk_counts.High }}</div><div class="r-kpi-lbl">High</div></div>
+            <div class="r-kpi"><div class="r-kpi-val" style="color:#ca8a04;">{{ risk_counts.Medium }}</div><div class="r-kpi-lbl">Medium</div></div>
+            <div class="r-kpi"><div class="r-kpi-val" style="color:#16a34a;">{{ risk_counts.Low }}</div><div class="r-kpi-lbl">Low</div></div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">2. Scope</h2>
+        <div class="report-detail-box">
+            <div class="report-detail-row"><span class="report-detail-label">Organization</span><span>{{ org.name if org else 'N/A' }}</span></div>
+            <div class="report-detail-row"><span class="report-detail-label">Industry</span><span>{{ (org.industry or 'N/A').title() if org else 'N/A' }}</span></div>
+            <div class="report-detail-row"><span class="report-detail-label">Exposure Level</span><span>{{ (org.exposure_level or 'N/A') if org else 'N/A' }}</span></div>
+            <div class="report-detail-row"><span class="report-detail-label">Assessment Date</span><span>{{ report_date }}</span></div>
+            <div class="report-detail-row"><span class="report-detail-label">Assets in Scope</span><span>{{ assets|length }}</span></div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">3. Methodology</h2>
+        <ol style="padding-left:1.5rem;">
+            <li><strong>Asset Identification</strong> — Information assets catalogued and rated by CIA triad.</li>
+            <li><strong>Threat & Vulnerability Analysis</strong> — Vulnerabilities mapped using OWASP/CWE classifications.</li>
+            <li><strong>Risk Scoring</strong> — Risk Score = Likelihood (1–5) × Impact (1–5), range 1–25.</li>
+            <li><strong>Risk Classification</strong> — Low: 1–4 | Medium: 5–9 | High: 10–15 | Critical: 16–25.</li>
+            <li><strong>Treatment Planning</strong> — Recommended controls and timelines assigned per risk level.</li>
+        </ol>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">4. Risk Register</h2>
+        {% if vulns %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Vulnerability</th>
+                    <th>Asset</th>
+                    <th>Asset Criticality</th>
+                    <th>Likelihood</th>
+                    <th>Impact</th>
+                    <th>Risk Score</th>
+                    <th>Risk Level</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vulns %}
+                <tr>
+                    <td style="color:var(--muted);">{{ loop.index }}</td>
+                    <td>
+                        <div style="font-weight:600;">{{ v['vuln_name'] }}</div>
+                        <div style="font-size:0.78rem;color:var(--muted);">{{ v['vuln_code'] }}</div>
+                    </td>
+                    <td>{{ v['asset_name'] }}</td>
+                    <td>{{ '%.2f'|format(v['criticality_score']) }}</td>
+                    <td style="text-align:center;">{{ v['likelihood'] }}</td>
+                    <td style="text-align:center;">{{ v['impact'] }}</td>
+                    <td style="text-align:center;font-weight:700;">{{ v['risk_score'] }}</td>
+                    <td><span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">No vulnerabilities recorded. Add assets and vulnerabilities to generate risk data.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">5. Critical & High Risk Details</h2>
+        {% set critical_high = vulns | selectattr('risk_level', 'in', ['Critical', 'High']) | list %}
+        {% if critical_high %}
+        {% for v in critical_high %}
+        <div class="finding finding-{{ v['risk_level']|lower }}">
+            <div class="finding-header">
+                <span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span>
+                <strong>{{ v['vuln_name'] }} ({{ v['vuln_code'] }})</strong>
+            </div>
+            <div><strong>Affected Asset:</strong> {{ v['asset_name'] }} &nbsp;|&nbsp; <strong>Risk Score:</strong> {{ v['risk_score'] }} ({{ v['likelihood'] }} × {{ v['impact'] }})</div>
+            <div style="margin-top:6px;font-size:0.9rem;color:var(--muted);"><strong>Recommended Action:</strong> Apply vendor patches and security hardening. Enforce input validation, least-privilege access, and implement corresponding NIST CSF controls.</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="empty-state">No critical or high severity risks identified.</p>
+        {% endif %}
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">6. Asset Risk Exposure</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Asset</th>
+                    <th>Type</th>
+                    <th>Criticality</th>
+                    <th>C</th><th>I</th><th>A</th>
+                    <th>Risks Mapped</th>
+                    <th>Highest Risk</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in assets %}
+                {% set av = vulns | selectattr('asset_name', 'equalto', a['name']) | list %}
+                {% set hc = av | selectattr('risk_level', 'equalto', 'Critical') | list %}
+                {% set hh = av | selectattr('risk_level', 'equalto', 'High') | list %}
+                {% set hm = av | selectattr('risk_level', 'equalto', 'Medium') | list %}
+                {% set highest = 'Critical' if hc else ('High' if hh else ('Medium' if hm else ('Low' if av else ''))) %}
+                <tr>
+                    <td><strong>{{ a['name'] }}</strong></td>
+                    <td>{{ a['asset_type'] }}</td>
+                    <td>{{ '%.2f'|format(a['criticality_score']) }}</td>
+                    <td>{{ a['confidentiality'] }}</td>
+                    <td>{{ a['integrity'] }}</td>
+                    <td>{{ a['availability'] }}</td>
+                    <td style="text-align:center;">{{ av|length }}</td>
+                    <td>{% if highest %}<span class="badge badge-{{ highest|lower }}">{{ highest }}</span>{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">7. Risk Treatment Plan</h2>
+        <table class="data-table">
+            <thead>
+                <tr><th>Level</th><th>Count</th><th>Treatment</th><th>Timeline</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="badge badge-critical">Critical</span></td>
+                    <td>{{ risk_counts.Critical }}</td>
+                    <td>Immediate remediation. Emergency patches and access controls. Escalate to management.</td>
+                    <td><strong>≤ 7 days</strong></td>
+                </tr>
+                <tr>
+                    <td><span class="badge badge-high">High</span></td>
+                    <td>{{ risk_counts.High }}</td>
+                    <td>Priority remediation with assigned owners. Apply compensating controls while patching.</td>
+                    <td><strong>30 days</strong></td>
+                </tr>
+                <tr>
+                    <td><span class="badge badge-medium">Medium</span></td>
+                    <td>{{ risk_counts.Medium }}</td>
+                    <td>Scheduled remediation in next security cycle. Monitor for escalation.</td>
+                    <td><strong>90 days</strong></td>
+                </tr>
+                <tr>
+                    <td><span class="badge badge-low">Low</span></td>
+                    <td>{{ risk_counts.Low }}</td>
+                    <td>Accept with documentation or address in routine maintenance. Review annually.</td>
+                    <td><strong>180 days</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="report-section">
+        <h2 class="report-section-title">8. Conclusion</h2>
+        <div class="report-opinion-block opinion-{{ opinion_class }}" style="padding:20px;border-radius:8px;margin-top:1rem;">
+            <div class="report-opinion-label">Risk Posture</div>
+            <div class="report-opinion-value">{{ risk_posture }}</div>
+            <p style="margin-top:0.75rem;font-size:0.95rem;">
+            {% if risk_posture == 'Low Risk' %}
+            The organization demonstrates a well-controlled risk environment with no critical vulnerabilities. Continue monitoring and maintain current security controls.
+            {% elif risk_posture == 'Moderate Risk' %}
+            The organization carries moderate risk exposure. Prioritize remediation of {{ risk_counts.High }} high-severity risks within 30 days and schedule medium risks within 90 days.
+            {% else %}
+            The organization faces significant risk exposure. {{ risk_counts.Critical }} critical and {{ risk_counts.High }} high-severity risks require immediate executive-level response and emergency remediation.
+            {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

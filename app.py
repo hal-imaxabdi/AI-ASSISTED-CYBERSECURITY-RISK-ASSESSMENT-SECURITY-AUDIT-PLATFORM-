@@ -736,6 +736,515 @@ def risk_assessment():
     db.close()
     return render_template('risk_assessment.html', vulns=vulns, risk_counts=risk_counts)
 
+
+def _get_risk_report_data():
+    db = get_db()
+    org = db.execute('SELECT * FROM organization ORDER BY id DESC LIMIT 1').fetchone()
+    vulns = db.execute("""
+        SELECT v.*, a.name as asset_name, a.criticality_score,
+               a.confidentiality, a.integrity, a.availability
+        FROM vulnerabilities v
+        JOIN assets a ON v.asset_id = a.id
+        ORDER BY v.risk_score DESC
+    """).fetchall()
+    assets = db.execute('SELECT * FROM assets ORDER BY criticality_score DESC').fetchall()
+    db.close()
+
+    risk_counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
+    for v in vulns:
+        if v['risk_level'] in risk_counts:
+            risk_counts[v['risk_level']] += 1
+
+    critical_count = risk_counts['Critical']
+    high_count = risk_counts['High']
+
+    if critical_count == 0 and high_count <= 2:
+        risk_posture, opinion_class = 'Low Risk', 'success'
+    elif critical_count <= 2 and high_count <= 5:
+        risk_posture, opinion_class = 'Moderate Risk', 'warning'
+    else:
+        risk_posture, opinion_class = 'High Risk', 'danger'
+
+    return dict(
+        org=org,
+        vulns=vulns,
+        assets=assets,
+        risk_counts=risk_counts,
+        critical_count=critical_count,
+        high_count=high_count,
+        risk_posture=risk_posture,
+        opinion_class=opinion_class,
+        report_date=datetime.now().strftime('%B %d, %Y')
+    )
+
+
+@app.route('/risk-assessment/report')
+@login_required
+def risk_assessment_report():
+    return render_template('risk_assessment_report.html', **_get_risk_report_data())
+
+
+@app.route('/risk-assessment/report/export')
+@login_required
+def risk_assessment_report_export():
+    return render_template('risk_assessment_report_export.html', **_get_risk_report_data())
+
+
+@app.route('/risk-assessment/report/export-pdf')
+@login_required
+def export_risk_assessment_pdf():
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak, KeepTogether
+
+    data = _get_risk_report_data()
+    org = data['org']
+    vulns = data['vulns']
+    assets = data['assets']
+    risk_counts = data['risk_counts']
+    critical_count = data['critical_count']
+    high_count = data['high_count']
+    risk_posture = data['risk_posture']
+    opinion_class = data['opinion_class']
+    report_date = data['report_date']
+    org_name = org['name'] if org else 'University IT System'
+
+    NAVY       = colors.HexColor('#0f1729')
+    BLUE       = colors.HexColor('#2563eb')
+    LIGHT_BLUE = colors.HexColor('#eff6ff')
+    GRAY_BG    = colors.HexColor('#f6f7fb')
+    GRAY_LINE  = colors.HexColor('#e4e7ef')
+    GRAY_TEXT  = colors.HexColor('#4b5573')
+    GRAY_MUTED = colors.HexColor('#8b92a8')
+    RED        = colors.HexColor('#dc2626')
+    ORANGE     = colors.HexColor('#ea580c')
+    YELLOW     = colors.HexColor('#ca8a04')
+    GREEN      = colors.HexColor('#16a34a')
+    RED_BG     = colors.HexColor('#fee2e2')
+    ORANGE_BG  = colors.HexColor('#ffedd5')
+    YELLOW_BG  = colors.HexColor('#fef9c3')
+    GREEN_BG   = colors.HexColor('#dcfce7')
+    WHITE      = colors.white
+
+    posture_color = {'Low Risk': GREEN, 'Moderate Risk': YELLOW, 'High Risk': RED}.get(risk_posture, BLUE)
+    posture_bg    = {'Low Risk': GREEN_BG, 'Moderate Risk': YELLOW_BG, 'High Risk': RED_BG}.get(risk_posture, LIGHT_BLUE)
+
+    def risk_color(level):
+        return {'Critical': RED, 'High': ORANGE, 'Medium': YELLOW, 'Low': GREEN}.get(level, GRAY_TEXT)
+
+    def risk_bg(level):
+        return {'Critical': RED_BG, 'High': ORANGE_BG, 'Medium': YELLOW_BG, 'Low': GREEN_BG}.get(level, GRAY_BG)
+
+    W, H = A4
+    MARGIN = 2.2 * cm
+    CONTENT_W = W - 2 * MARGIN
+
+    def S(name, **kw):
+        return ParagraphStyle(name, **kw)
+
+    sH1      = S('sH1',    fontName='Helvetica-Bold', fontSize=13, textColor=NAVY,      leading=18, spaceBefore=16, spaceAfter=6)
+    sBody    = S('sBody',  fontName='Helvetica',      fontSize=9,  textColor=GRAY_TEXT, leading=14, spaceAfter=6, alignment=TA_JUSTIFY)
+    sBold    = S('sBold',  fontName='Helvetica-Bold', fontSize=9,  textColor=colors.HexColor('#0f1729'), leading=14)
+    sSmall   = S('sSmall', fontName='Helvetica',      fontSize=8,  textColor=GRAY_MUTED, leading=12)
+    sTableH  = S('sTableH',fontName='Helvetica-Bold', fontSize=8,  textColor=WHITE,     leading=11)
+    sTableB  = S('sTableB',fontName='Helvetica',      fontSize=8,  textColor=GRAY_TEXT, leading=11)
+    sTableBd = S('sTableBd',fontName='Helvetica-Bold',fontSize=8,  textColor=colors.HexColor('#0f1729'), leading=11)
+    sCenter  = S('sCenter',fontName='Helvetica',      fontSize=8,  textColor=GRAY_TEXT, leading=11, alignment=TA_CENTER)
+    sCtrBold = S('sCtrBold',fontName='Helvetica-Bold',fontSize=8,  textColor=colors.HexColor('#0f1729'), leading=11, alignment=TA_CENTER)
+
+    def table_style():
+        return TableStyle([
+            ('FONTNAME',     (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE',     (0,0), (-1,-1), 8),
+            ('LEADING',      (0,0), (-1,-1), 11),
+            ('VALIGN',       (0,0), (-1,-1), 'TOP'),
+            ('TOPPADDING',   (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING',(0,0), (-1,-1), 5),
+            ('LEFTPADDING',  (0,0), (-1,-1), 7),
+            ('RIGHTPADDING', (0,0), (-1,-1), 7),
+            ('BACKGROUND',   (0,0), (-1, 0), NAVY),
+            ('FONTNAME',     (0,0), (-1, 0), 'Helvetica-Bold'),
+            ('TEXTCOLOR',    (0,0), (-1, 0), WHITE),
+            ('ROWBACKGROUNDS',(0,1),(-1,-1), [WHITE, GRAY_BG]),
+            ('LINEBELOW',    (0,0), (-1,-1), 0.3, GRAY_LINE),
+            ('BOX',          (0,0), (-1,-1), 0.5, GRAY_LINE),
+        ])
+
+    def section_title(num, title):
+        return [
+            Spacer(1, 0.2*cm),
+            HRFlowable(width=CONTENT_W, thickness=0.5, color=GRAY_LINE, spaceAfter=6),
+            Paragraph(f'<font color="#2563eb">{num}.</font>  {title}', sH1),
+            HRFlowable(width=CONTENT_W, thickness=2, color=BLUE, spaceBefore=2, spaceAfter=10),
+        ]
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=MARGIN, rightMargin=MARGIN,
+                            topMargin=MARGIN, bottomMargin=MARGIN,
+                            title=f'Risk Assessment Report — {org_name}')
+
+    def on_page(canvas, doc):
+        canvas.saveState()
+        if doc.page == 1:
+            canvas.restoreState()
+            return
+        canvas.setFillColor(NAVY)
+        canvas.rect(MARGIN, H - 1.4*cm, CONTENT_W, 0.55*cm, fill=1, stroke=0)
+        canvas.setFillColor(WHITE)
+        canvas.setFont('Helvetica-Bold', 7)
+        canvas.drawString(MARGIN + 4, H - 1.08*cm, 'RISK ASSESSMENT REPORT')
+        canvas.setFont('Helvetica', 7)
+        canvas.drawRightString(W - MARGIN - 4, H - 1.08*cm, org_name.upper())
+        canvas.setFillColor(GRAY_LINE)
+        canvas.rect(MARGIN, 1.1*cm, CONTENT_W, 0.03*cm, fill=1, stroke=0)
+        canvas.setFillColor(GRAY_MUTED)
+        canvas.setFont('Helvetica', 7)
+        canvas.drawString(MARGIN, 0.75*cm, f'ISO/IEC 27005 · NIST SP 800-30  |  {report_date}  |  CONFIDENTIAL')
+        canvas.drawRightString(W - MARGIN, 0.75*cm, f'Page {doc.page}')
+        canvas.restoreState()
+
+    def cover_page(canvas, doc):
+        on_page(canvas, doc)
+        if doc.page != 1:
+            return
+        canvas.saveState()
+        canvas.setFillColor(NAVY)
+        canvas.rect(0, 0, W, H, fill=1, stroke=0)
+        canvas.setFillColor(BLUE)
+        canvas.rect(0, H - 0.6*cm, W, 0.6*cm, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor('#1e3a5f'))
+        canvas.rect(0, H * 0.38, W, H * 0.52, fill=1, stroke=0)
+        canvas.setFillColor(BLUE)
+        canvas.rect(MARGIN, H * 0.20, 0.18*cm, H * 0.68, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor('#1e3a5f'))
+        canvas.rect(MARGIN + 0.5*cm, H * 0.82, CONTENT_W * 0.7, 0.7*cm, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor('#93c5fd'))
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(MARGIN + 0.9*cm, H * 0.845, 'PREPARED FOR')
+        canvas.setFillColor(WHITE)
+        canvas.setFont('Helvetica-Bold', 11)
+        canvas.drawString(MARGIN + 0.9*cm, H * 0.835 - 8, org_name)
+        canvas.setFont('Helvetica-Bold', 30)
+        canvas.drawString(MARGIN + 0.5*cm, H * 0.66, 'Risk Assessment')
+        canvas.setFont('Helvetica', 28)
+        canvas.drawString(MARGIN + 0.5*cm, H * 0.60, 'Report')
+        canvas.setFillColor(BLUE)
+        canvas.roundRect(MARGIN + 0.5*cm, H * 0.535, 5*cm, 0.55*cm, 4, fill=1, stroke=0)
+        canvas.setFillColor(WHITE)
+        canvas.setFont('Helvetica-Bold', 8)
+        canvas.drawString(MARGIN + 0.9*cm, H * 0.555, 'ISO/IEC 27005 · NIST SP 800-30')
+        canvas.setFillColor(colors.HexColor('#94a3b8'))
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(MARGIN + 0.5*cm, H * 0.49, f'Report Date: {report_date}')
+        canvas.drawString(MARGIN + 0.5*cm, H * 0.465, 'Classification: Confidential')
+        canvas.setFillColor(posture_color)
+        canvas.roundRect(MARGIN + 0.5*cm, H * 0.25, CONTENT_W * 0.55, 1.6*cm, 6, fill=1, stroke=0)
+        canvas.setFillColor(WHITE)
+        canvas.setFont('Helvetica', 7)
+        canvas.drawString(MARGIN + 1.0*cm, H * 0.25 + 1.15*cm, 'OVERALL RISK POSTURE')
+        canvas.setFont('Helvetica-Bold', 16)
+        canvas.drawString(MARGIN + 1.0*cm, H * 0.25 + 0.45*cm, risk_posture)
+        kpis = [
+            (str(risk_counts['Critical']), 'Critical'),
+            (str(risk_counts['High']),     'High'),
+            (str(risk_counts['Medium']),   'Medium'),
+            (str(risk_counts['Low']),      'Low'),
+        ]
+        box_w = CONTENT_W / 4 - 0.2*cm
+        kpi_colors = [RED, ORANGE, YELLOW, GREEN]
+        kpi_bgs    = [RED_BG, ORANGE_BG, YELLOW_BG, GREEN_BG]
+        for i, (val, lbl) in enumerate(kpis):
+            x = MARGIN + i * (box_w + 0.27*cm)
+            canvas.setFillColor(colors.HexColor('#1e2a42'))
+            canvas.roundRect(x, 1.8*cm, box_w, 1.6*cm, 5, fill=1, stroke=0)
+            canvas.setFillColor(kpi_colors[i])
+            canvas.setFont('Helvetica-Bold', 18)
+            canvas.drawCentredString(x + box_w/2, 2.75*cm, val)
+            canvas.setFillColor(colors.HexColor('#94a3b8'))
+            canvas.setFont('Helvetica', 7.5)
+            canvas.drawCentredString(x + box_w/2, 2.25*cm, lbl.upper())
+        canvas.restoreState()
+
+    story = []
+    story.append(Spacer(1, H - 4*MARGIN))
+    story.append(PageBreak())
+
+    story += section_title('1', 'Executive Summary')
+    story.append(Paragraph(
+        f'This risk assessment was conducted on <b>{org_name}</b> using a quantitative likelihood–impact '
+        f'scoring model aligned with ISO/IEC 27005 and NIST SP 800-30. A total of <b>{len(vulns)}</b> risks '
+        f'were evaluated across <b>{len(assets)}</b> information assets.',
+        sBody))
+    story.append(Spacer(1, 0.2*cm))
+
+    kpi_data = [[
+        Paragraph(str(len(vulns)),            ParagraphStyle('kv', fontName='Helvetica-Bold', fontSize=20, textColor=BLUE,   alignment=TA_CENTER, leading=24)),
+        Paragraph(str(risk_counts['Critical']),ParagraphStyle('kv', fontName='Helvetica-Bold', fontSize=20, textColor=RED,    alignment=TA_CENTER, leading=24)),
+        Paragraph(str(risk_counts['High']),    ParagraphStyle('kv', fontName='Helvetica-Bold', fontSize=20, textColor=ORANGE, alignment=TA_CENTER, leading=24)),
+        Paragraph(str(risk_counts['Medium']),  ParagraphStyle('kv', fontName='Helvetica-Bold', fontSize=20, textColor=YELLOW, alignment=TA_CENTER, leading=24)),
+        Paragraph(str(risk_counts['Low']),     ParagraphStyle('kv', fontName='Helvetica-Bold', fontSize=20, textColor=GREEN,  alignment=TA_CENTER, leading=24)),
+    ],[
+        Paragraph('Total Risks', ParagraphStyle('kl', fontName='Helvetica', fontSize=7.5, textColor=GRAY_MUTED, alignment=TA_CENTER, leading=10)),
+        Paragraph('Critical',    ParagraphStyle('kl', fontName='Helvetica', fontSize=7.5, textColor=RED,        alignment=TA_CENTER, leading=10)),
+        Paragraph('High',        ParagraphStyle('kl', fontName='Helvetica', fontSize=7.5, textColor=ORANGE,     alignment=TA_CENTER, leading=10)),
+        Paragraph('Medium',      ParagraphStyle('kl', fontName='Helvetica', fontSize=7.5, textColor=YELLOW,     alignment=TA_CENTER, leading=10)),
+        Paragraph('Low',         ParagraphStyle('kl', fontName='Helvetica', fontSize=7.5, textColor=GREEN,      alignment=TA_CENTER, leading=10)),
+    ]]
+    kt = Table(kpi_data, colWidths=[CONTENT_W/5]*5, rowHeights=[1.0*cm, 0.4*cm])
+    kt.setStyle(TableStyle([
+        ('BACKGROUND',   (0,0), (0,-1), LIGHT_BLUE),
+        ('BACKGROUND',   (1,0), (1,-1), RED_BG),
+        ('BACKGROUND',   (2,0), (2,-1), ORANGE_BG),
+        ('BACKGROUND',   (3,0), (3,-1), YELLOW_BG),
+        ('BACKGROUND',   (4,0), (4,-1), GREEN_BG),
+        ('INNERGRID',    (0,0), (-1,-1), 0.5, GRAY_LINE),
+        ('BOX',          (0,0), (-1,-1), 0.5, GRAY_LINE),
+        ('VALIGN',       (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING',   (0,0), (-1, 0), 8),
+        ('BOTTOMPADDING',(0,0), (-1,-1), 5),
+    ]))
+    story.append(kt)
+    story.append(Spacer(1, 0.3*cm))
+
+    posture_desc = {
+        'Low Risk':      f'The organization presents a low overall risk exposure with no critical vulnerabilities and only {risk_counts["High"]} high-severity risks. Maintain current controls and continue monitoring.',
+        'Moderate Risk': f'Moderate risk exposure detected. {risk_counts["High"]} high-severity and {risk_counts["Medium"]} medium-severity risks require prioritized remediation within 30–90 days.',
+        'High Risk':     f'High risk exposure identified. {risk_counts["Critical"]} critical and {risk_counts["High"]} high-severity risks require immediate escalation and emergency remediation actions.',
+    }.get(risk_posture, '')
+
+    posture_data = [[
+        Paragraph('OVERALL RISK POSTURE', ParagraphStyle('pl', fontName='Helvetica-Bold', fontSize=7, textColor=WHITE, leading=10)),
+        Paragraph(risk_posture, ParagraphStyle('pv', fontName='Helvetica-Bold', fontSize=14, textColor=WHITE, leading=18, alignment=TA_CENTER)),
+        Paragraph(posture_desc, ParagraphStyle('pd', fontName='Helvetica', fontSize=8, textColor=WHITE, leading=12, alignment=TA_JUSTIFY)),
+    ]]
+    pt = Table(posture_data, colWidths=[3.5*cm, 4*cm, CONTENT_W - 7.5*cm])
+    pt.setStyle(TableStyle([
+        ('BACKGROUND',   (0,0), (-1,-1), posture_color),
+        ('VALIGN',       (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING',   (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING',(0,0), (-1,-1), 10),
+        ('LEFTPADDING',  (0,0), (-1,-1), 12),
+        ('RIGHTPADDING', (0,0), (-1,-1), 12),
+        ('LINEAFTER',    (0,0), (1,-1),  0.5, colors.HexColor('#ffffff44')),
+    ]))
+    story.append(pt)
+
+    story += section_title('2', 'Scope')
+    scope_rows = [
+        [Paragraph('Organization',   sBold), Paragraph(org_name, sBody)],
+        [Paragraph('Industry',        sBold), Paragraph((org['industry'] or 'N/A').title() if org else 'N/A', sBody)],
+        [Paragraph('Exposure Level',  sBold), Paragraph((org['exposure_level'] or 'N/A') if org else 'N/A', sBody)],
+        [Paragraph('Assets in Scope', sBold), Paragraph(str(len(assets)), sBody)],
+        [Paragraph('Assessment Date', sBold), Paragraph(report_date, sBody)],
+        [Paragraph('Methodology',     sBold), Paragraph('ISO/IEC 27005 · NIST SP 800-30 Quantitative Risk Scoring', sBody)],
+    ]
+    st = Table(scope_rows, colWidths=[4*cm, CONTENT_W - 4*cm])
+    st.setStyle(TableStyle([
+        ('FONTNAME',     (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE',     (0,0), (-1,-1), 8.5),
+        ('VALIGN',       (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING',   (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING',(0,0), (-1,-1), 5),
+        ('LEFTPADDING',  (0,0), (-1,-1), 8),
+        ('ROWBACKGROUNDS',(0,0),(-1,-1), [GRAY_BG, WHITE]),
+        ('LINEBELOW',    (0,0), (-1,-1), 0.3, GRAY_LINE),
+        ('BOX',          (0,0), (-1,-1), 0.5, GRAY_LINE),
+    ]))
+    story.append(st)
+
+    story += section_title('3', 'Methodology')
+    story.append(Paragraph(
+        'Risk Score = <b>Likelihood (1–5) × Impact (1–5)</b>, producing a score of 1–25. '
+        'Risks are classified as: <b>Low</b> (1–4), <b>Medium</b> (5–9), <b>High</b> (10–15), <b>Critical</b> (16–25).',
+        sBody))
+
+    story.append(PageBreak())
+    story += section_title('4', 'Risk Register')
+    story.append(Paragraph(
+        f'All {len(vulns)} vulnerabilities mapped across {len(assets)} assets, ordered by risk score descending.',
+        sBody))
+    story.append(Spacer(1, 0.2*cm))
+
+    if vulns:
+        headers = [
+            Paragraph('#',            sTableH),
+            Paragraph('Vulnerability', sTableH),
+            Paragraph('Asset',         sTableH),
+            Paragraph('Likelihood',    sTableH),
+            Paragraph('Impact',        sTableH),
+            Paragraph('Score',         sTableH),
+            Paragraph('Level',         sTableH),
+        ]
+        rows = [headers]
+        for idx, v in enumerate(vulns, 1):
+            level = v['risk_level']
+            rows.append([
+                Paragraph(str(idx), sCenter),
+                Paragraph(f"{v['vuln_name']}<br/><font color='#8b92a8' size='7'>{v['vuln_code']}</font>", sTableB),
+                Paragraph(v['asset_name'], sTableB),
+                Paragraph(str(v['likelihood']), sCenter),
+                Paragraph(str(v['impact']),     sCenter),
+                Paragraph(str(int(v['risk_score'])), sCtrBold),
+                Paragraph(level, ParagraphStyle('rl', fontName='Helvetica-Bold', fontSize=7.5,
+                          textColor=risk_color(level), alignment=TA_CENTER, leading=11)),
+            ])
+        vt = Table(rows, colWidths=[0.6*cm, 5*cm, 3.5*cm, 1.4*cm, 1.1*cm, 1.1*cm, 1.5*cm], repeatRows=1)
+        vt.setStyle(table_style())
+        for i, v in enumerate(vulns, 1):
+            vt.setStyle(TableStyle([('BACKGROUND', (6,i), (6,i), risk_bg(v['risk_level']))]))
+        story.append(vt)
+    else:
+        story.append(Paragraph('No vulnerabilities recorded.', sSmall))
+
+    story += section_title('5', 'Critical & High Risk Details')
+    critical_high = [v for v in vulns if v['risk_level'] in ('Critical', 'High')]
+    if critical_high:
+        for v in critical_high:
+            level = v['risk_level']
+            rc = risk_color(level)
+            rb = risk_bg(level)
+            block = [[
+                Paragraph(f"{level.upper()}  —  {v['vuln_name']} ({v['vuln_code']})",
+                          ParagraphStyle('bt', fontName='Helvetica-Bold', fontSize=9, textColor=WHITE, leading=13)),
+                Paragraph(f"Score: {int(v['risk_score'])}  ({v['likelihood']} × {v['impact']})",
+                          ParagraphStyle('bs', fontName='Helvetica', fontSize=8, textColor=WHITE, leading=13, alignment=TA_RIGHT)),
+            ],[
+                Paragraph(f"<b>Affected Asset:</b> {v['asset_name']}  |  <b>Asset Criticality:</b> {v['criticality_score']:.2f}", sTableB),
+                Paragraph('', sTableB),
+            ],[
+                Paragraph('<b>Recommended Action:</b> Apply vendor patches and security hardening. Enforce input validation, '
+                          'least-privilege access controls, and implement corresponding NIST CSF security controls immediately.', sTableB),
+                Paragraph('', sTableB),
+            ]]
+            bt = Table(block, colWidths=[CONTENT_W * 0.65, CONTENT_W * 0.35])
+            bt.setStyle(TableStyle([
+                ('BACKGROUND',   (0,0), (-1, 0), rc),
+                ('BACKGROUND',   (0,1), (-1,-1), rb),
+                ('SPAN',         (0,1), (-1, 1)),
+                ('SPAN',         (0,2), (-1, 2)),
+                ('VALIGN',       (0,0), (-1,-1), 'TOP'),
+                ('TOPPADDING',   (0,0), (-1,-1), 6),
+                ('BOTTOMPADDING',(0,0), (-1,-1), 6),
+                ('LEFTPADDING',  (0,0), (-1,-1), 10),
+                ('RIGHTPADDING', (0,0), (-1,-1), 10),
+                ('BOX',          (0,0), (-1,-1), 0.8, rc),
+                ('LINEBELOW',    (0,0), (-1, 0), 0.3, colors.HexColor('#ffffff44')),
+                ('LINEBELOW',    (0,1), (-1, 1), 0.3, GRAY_LINE),
+            ]))
+            story.append(KeepTogether([bt, Spacer(1, 0.25*cm)]))
+    else:
+        story.append(Paragraph('No critical or high severity risks identified.', sSmall))
+
+    story += section_title('6', 'Asset Risk Exposure')
+    asset_headers = [
+        Paragraph('Asset',         sTableH),
+        Paragraph('Type',          sTableH),
+        Paragraph('Criticality',   sTableH),
+        Paragraph('C', sTableH), Paragraph('I', sTableH), Paragraph('A', sTableH),
+        Paragraph('Risks',         sTableH),
+        Paragraph('Highest',       sTableH),
+    ]
+    asset_rows = [asset_headers]
+    for a in assets:
+        av = [v for v in vulns if v['asset_name'] == a['name']]
+        hc = [v for v in av if v['risk_level'] == 'Critical']
+        hh = [v for v in av if v['risk_level'] == 'High']
+        hm = [v for v in av if v['risk_level'] == 'Medium']
+        highest = 'Critical' if hc else ('High' if hh else ('Medium' if hm else ('Low' if av else '')))
+        hcol = risk_color(highest) if highest else GRAY_MUTED
+        asset_rows.append([
+            Paragraph(a['name'],       sTableBd),
+            Paragraph(a['asset_type'] or '—', sTableB),
+            Paragraph(f"{a['criticality_score']:.2f}", sCtrBold),
+            Paragraph(str(a['confidentiality']), sCenter),
+            Paragraph(str(a['integrity']),       sCenter),
+            Paragraph(str(a['availability']),    sCenter),
+            Paragraph(str(len(av)), sCenter),
+            Paragraph(highest or '—', ParagraphStyle('hl', fontName='Helvetica-Bold', fontSize=7.5,
+                      textColor=hcol, alignment=TA_CENTER, leading=11)),
+        ])
+    at = Table(asset_rows, colWidths=[4*cm, 2.5*cm, 1.8*cm, 0.7*cm, 0.7*cm, 0.7*cm, 1.1*cm, 2*cm], repeatRows=1)
+    at.setStyle(table_style())
+    story.append(at)
+
+    story += section_title('7', 'Risk Treatment Plan')
+    treat_headers = [
+        Paragraph('Risk Level',  sTableH),
+        Paragraph('Count',       sTableH),
+        Paragraph('Treatment',   sTableH),
+        Paragraph('Timeline',    sTableH),
+    ]
+    treat_rows = [treat_headers,
+        [Paragraph('Critical', ParagraphStyle('tl', fontName='Helvetica-Bold', fontSize=8, textColor=RED,    leading=11)),
+         Paragraph(str(risk_counts['Critical']), sCtrBold),
+         Paragraph('Immediate remediation. Emergency patches and access controls. Escalate to senior management.', sTableB),
+         Paragraph('≤ 7 days', ParagraphStyle('tt', fontName='Helvetica-Bold', fontSize=8, textColor=RED, leading=11))],
+        [Paragraph('High', ParagraphStyle('tl', fontName='Helvetica-Bold', fontSize=8, textColor=ORANGE, leading=11)),
+         Paragraph(str(risk_counts['High']), sCtrBold),
+         Paragraph('Priority remediation with assigned owners. Apply compensating controls while patching.', sTableB),
+         Paragraph('30 days', ParagraphStyle('tt', fontName='Helvetica-Bold', fontSize=8, textColor=ORANGE, leading=11))],
+        [Paragraph('Medium', ParagraphStyle('tl', fontName='Helvetica-Bold', fontSize=8, textColor=YELLOW, leading=11)),
+         Paragraph(str(risk_counts['Medium']), sCtrBold),
+         Paragraph('Scheduled remediation in next security cycle. Monitor for escalation.', sTableB),
+         Paragraph('90 days', ParagraphStyle('tt', fontName='Helvetica-Bold', fontSize=8, textColor=YELLOW, leading=11))],
+        [Paragraph('Low', ParagraphStyle('tl', fontName='Helvetica-Bold', fontSize=8, textColor=GREEN, leading=11)),
+         Paragraph(str(risk_counts['Low']), sCtrBold),
+         Paragraph('Accept with documentation or address in routine maintenance cycle. Review annually.', sTableB),
+         Paragraph('180 days', ParagraphStyle('tt', fontName='Helvetica-Bold', fontSize=8, textColor=GREEN, leading=11))],
+    ]
+    tt = Table(treat_rows, colWidths=[2.5*cm, 1.5*cm, CONTENT_W - 7*cm, 3*cm], repeatRows=1)
+    tt.setStyle(table_style())
+    story.append(tt)
+
+    story += section_title('8', 'Conclusion')
+    story.append(Paragraph(
+        'Based on the quantitative risk assessment results, the following conclusion is issued:',
+        sBody))
+    story.append(Spacer(1, 0.3*cm))
+
+    conclusion_text = {
+        'Low Risk':      f'The organization demonstrates a well-controlled risk environment. '
+                         f'Total risks: {len(vulns)}. No critical vulnerabilities detected. '
+                         f'Continue monitoring and maintain current security controls.',
+        'Moderate Risk': f'The organization carries moderate risk exposure with {risk_counts["High"]} high-severity '
+                         f'and {risk_counts["Medium"]} medium-severity risks. Prioritized remediation within 90 days '
+                         f'is recommended to prevent risk escalation.',
+        'High Risk':     f'The organization is exposed to significant risk. {risk_counts["Critical"]} critical and '
+                         f'{risk_counts["High"]} high-severity risks are present. Immediate executive-level response '
+                         f'and emergency remediation actions are required.',
+    }.get(risk_posture, '')
+
+    conc_data = [[
+        Paragraph(risk_posture, ParagraphStyle('cv', fontName='Helvetica-Bold', fontSize=22,
+                  textColor=WHITE, leading=26, alignment=TA_CENTER)),
+    ],[
+        Paragraph(conclusion_text, ParagraphStyle('cd', fontName='Helvetica', fontSize=9,
+                  textColor=WHITE, leading=14, alignment=TA_JUSTIFY)),
+    ]]
+    ct = Table(conc_data, colWidths=[CONTENT_W])
+    ct.setStyle(TableStyle([
+        ('BACKGROUND',   (0,0), (-1,-1), posture_color),
+        ('TOPPADDING',   (0,0), (-1, 0), 16),
+        ('BOTTOMPADDING',(0,0), (-1, 0), 12),
+        ('TOPPADDING',   (0,1), (-1, 1), 10),
+        ('BOTTOMPADDING',(0,1), (-1, 1), 16),
+        ('LEFTPADDING',  (0,0), (-1,-1), 20),
+        ('RIGHTPADDING', (0,0), (-1,-1), 20),
+        ('LINEBELOW',    (0,0), (-1, 0), 0.5, colors.HexColor('#ffffff44')),
+    ]))
+    story.append(ct)
+
+    doc.build(story, onFirstPage=cover_page, onLaterPages=on_page)
+    buffer.seek(0)
+    filename = f"Risk_Assessment_Report_{org_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    return send_file(buffer, as_attachment=True, download_name=filename, mimetype='application/pdf')
+
+
 @app.route('/audit-checklist', methods=['GET','POST'])
 @login_required
 def audit_checklist():

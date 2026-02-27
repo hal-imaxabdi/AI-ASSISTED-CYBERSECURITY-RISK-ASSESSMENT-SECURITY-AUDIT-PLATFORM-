@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Risk Assessment Report — {{ org.name if org else 'University IT System' }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Georgia, serif; color: #1a1a1a; line-height: 1.6; background: #fff; }
+.page { max-width: 900px; margin: 0 auto; padding: 40px; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.25rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.4rem; margin-top: 2rem; color: #1e3a5f; }
+h3 { font-size: 1rem; color: #374151; margin-bottom: 0.5rem; }
+p { margin-bottom: 0.75rem; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+th { background: #1e3a5f; color: #fff; padding: 8px 12px; text-align: left; }
+td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+tr:nth-child(even) td { background: #f9fafb; }
+.cover { text-align: center; padding: 60px 40px; background: linear-gradient(135deg, #eff6ff, #e0f2fe); border-radius: 10px; margin-bottom: 2.5rem; }
+.cover-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+.cover-title { font-size: 2rem; font-weight: bold; color: #1e3a5f; margin-bottom: 0.25rem; }
+.cover-org { font-size: 1.15rem; color: #4b5563; margin-bottom: 0.25rem; }
+.cover-date { color: #6b7280; font-size: 0.9rem; }
+.cover-tag { display: inline-block; background: #dbeafe; color: #1d4ed8; padding: 3px 14px; border-radius: 20px; font-size: 0.85rem; margin-top: 1rem; }
+.opinion { padding: 16px 20px; border-radius: 8px; margin: 1rem 0; }
+.opinion-success { background: #dcfce7; border-left: 5px solid #16a34a; }
+.opinion-warning { background: #fef9c3; border-left: 5px solid #ca8a04; }
+.opinion-danger  { background: #fee2e2; border-left: 5px solid #dc2626; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; }
+.badge-critical { background: #fee2e2; color: #dc2626; }
+.badge-high     { background: #ffedd5; color: #ea580c; }
+.badge-medium   { background: #fef9c3; color: #ca8a04; }
+.badge-low      { background: #dcfce7; color: #16a34a; }
+.kpi-row { display: flex; gap: 16px; margin: 1.25rem 0; }
+.kpi { flex: 1; text-align: center; padding: 16px; background: #f0f4ff; border-radius: 8px; border: 1px solid #e0e7ff; }
+.kpi-val { font-size: 2rem; font-weight: bold; color: #1e3a5f; }
+.kpi-lbl { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
+.risk-item { padding: 14px 16px; margin: 0.75rem 0; border-left: 4px solid #e5e7eb; background: #f9fafb; border-radius: 0 6px 6px 0; }
+.risk-item-critical { border-left-color: #dc2626; }
+.risk-item-high     { border-left-color: #ea580c; }
+.risk-item-medium   { border-left-color: #ca8a04; }
+.risk-item-low      { border-left-color: #16a34a; }
+.risk-item-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.risk-item-meta { font-size: 0.85rem; color: #6b7280; margin-top: 4px; }
+.matrix-wrap { overflow-x: auto; margin: 1rem 0; }
+.matrix { display: inline-grid; grid-template-columns: 40px repeat(5, 60px); grid-template-rows: repeat(5, 60px) 40px; gap: 3px; font-size: 0.78rem; }
+.matrix-cell { display: flex; align-items: center; justify-content: center; border-radius: 4px; font-weight: 700; position: relative; }
+.cell-low      { background: #bbf7d0; color: #15803d; }
+.cell-medium   { background: #fef08a; color: #a16207; }
+.cell-high     { background: #fed7aa; color: #c2410c; }
+.cell-critical { background: #fecaca; color: #b91c1c; }
+.matrix-label { display: flex; align-items: center; justify-content: center; font-size: 0.72rem; color: #6b7280; font-style: italic; }
+.matrix-axis-label { font-weight: 600; color: #374151; font-size: 0.78rem; }
+.treat-table td:nth-child(3) { font-size: 0.82rem; }
+.section { margin-bottom: 0.5rem; }
+hr.divider { border: none; border-top: 1px solid #e5e7eb; margin: 2.5rem 0; }
+.footer { text-align: center; color: #9ca3af; font-size: 0.82rem; margin-top: 3rem; }
+ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+li { margin-bottom: 0.4rem; }
+@media print {
+    .page { padding: 20px; }
+    .cover { break-after: page; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="cover">
+    <div class="cover-icon">⚠️</div>
+    <div class="cover-title">Risk Assessment Report</div>
+    <div class="cover-org">{{ org.name if org else 'University IT System' }}</div>
+    <div class="cover-date">{{ report_date }}</div>
+    <div class="cover-tag">ISO/IEC 27005 · NIST SP 800-30 Risk Methodology</div>
+</div>
+
+<div class="opinion opinion-{{ opinion_class }}">
+    <strong>Overall Risk Posture: {{ risk_posture }}</strong><br>
+    {% if risk_posture == 'Low Risk' %}The organization presents a low overall risk exposure. Maintain current controls and continue monitoring.
+    {% elif risk_posture == 'Moderate Risk' %}Moderate risk exposure detected. Prioritize remediation of high-severity items within 90 days.
+    {% else %}High risk exposure identified. {{ critical_count }} critical risks require immediate action.{% endif %}
+</div>
+
+<h2>1. Executive Summary</h2>
+<p>This risk assessment was conducted on <strong>{{ org.name if org else 'the University IT System' }}</strong> using a quantitative likelihood-impact scoring model. A total of <strong>{{ vulns|length }}</strong> risk entries across <strong>{{ assets|length }}</strong> information assets were evaluated.</p>
+<div class="kpi-row">
+    <div class="kpi"><div class="kpi-val">{{ vulns|length }}</div><div class="kpi-lbl">Total Risks</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#dc2626;">{{ risk_counts.Critical }}</div><div class="kpi-lbl">Critical</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#ea580c;">{{ risk_counts.High }}</div><div class="kpi-lbl">High</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#ca8a04;">{{ risk_counts.Medium }}</div><div class="kpi-lbl">Medium</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:#16a34a;">{{ risk_counts.Low }}</div><div class="kpi-lbl">Low</div></div>
+</div>
+
+<h2>2. Scope</h2>
+<p><strong>Organization:</strong> {{ org.name if org else 'N/A' }} &nbsp;|&nbsp; <strong>Industry:</strong> {{ (org.industry or 'N/A').title() if org else 'N/A' }} &nbsp;|&nbsp; <strong>Exposure Level:</strong> {{ (org.exposure_level or 'N/A') if org else 'N/A' }} &nbsp;|&nbsp; <strong>Date:</strong> {{ report_date }}</p>
+<p>This assessment covers all registered information assets and their associated vulnerabilities catalogued in the AuditShield platform.</p>
+
+<h2>3. Methodology</h2>
+<ol>
+    <li><strong>Asset Identification</strong> — All information assets inventoried and classified by Confidentiality, Integrity, and Availability (CIA) ratings.</li>
+    <li><strong>Threat & Vulnerability Analysis</strong> — Vulnerabilities mapped to assets using OWASP/CWE classifications.</li>
+    <li><strong>Risk Scoring</strong> — Risk Score = Likelihood (1–5) × Impact (1–5), producing scores from 1 to 25.</li>
+    <li><strong>Risk Classification</strong> — Low: 1–4 | Medium: 5–9 | High: 10–15 | Critical: 16–25.</li>
+    <li><strong>Treatment Planning</strong> — Recommended actions assigned per risk level.</li>
+</ol>
+
+<h2>4. Risk Matrix</h2>
+<div class="matrix-wrap">
+    <table style="width:auto;font-size:0.82rem;border-collapse:separate;border-spacing:3px;">
+        <thead>
+            <tr>
+                <th style="background:#374151;width:80px;">L \ I</th>
+                {% for i in range(1,6) %}
+                <th style="background:#374151;width:60px;text-align:center;">Impact {{ i }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in range(5,0,-1) %}
+            <tr>
+                <td style="background:#374151;color:#fff;font-weight:700;text-align:center;">Like. {{ l }}</td>
+                {% for i in range(1,6) %}
+                {% set score = l * i %}
+                {% if score <= 4 %}{% set bg='#bbf7d0' %}{% set tc='#15803d' %}
+                {% elif score <= 9 %}{% set bg='#fef08a' %}{% set tc='#a16207' %}
+                {% elif score <= 15 %}{% set bg='#fed7aa' %}{% set tc='#c2410c' %}
+                {% else %}{% set bg='#fecaca' %}{% set tc='#b91c1c' %}{% endif %}
+                <td style="background:{{ bg }};color:{{ tc }};font-weight:700;text-align:center;border-radius:4px;">
+                    {{ score }}
+                    {% set dots = vulns | selectattr('likelihood','equalto', l) | selectattr('impact','equalto', i) | list %}
+                    {% if dots %}<br><span style="font-size:0.7rem;font-weight:400;">▲{{ dots|length }}</span>{% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:#6b7280;margin-top:0.4rem;">▲ indicates number of vulnerabilities plotted at that cell. L = Likelihood, I = Impact.</p>
+</div>
+
+<h2>5. Risk Register</h2>
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Vulnerability</th>
+            <th>Asset</th>
+            <th>Asset Criticality</th>
+            <th>Likelihood</th>
+            <th>Impact</th>
+            <th>Score</th>
+            <th>Level</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for v in vulns %}
+        <tr>
+            <td style="color:#9ca3af;">{{ loop.index }}</td>
+            <td><strong>{{ v['vuln_name'] }}</strong><br><span style="font-size:0.78rem;color:#6b7280;">{{ v['vuln_code'] }}</span></td>
+            <td>{{ v['asset_name'] }}</td>
+            <td>{{ '%.2f'|format(v['criticality_score']) }}</td>
+            <td style="text-align:center;">{{ v['likelihood'] }}</td>
+            <td style="text-align:center;">{{ v['impact'] }}</td>
+            <td style="text-align:center;font-weight:700;">{{ v['risk_score'] }}</td>
+            <td><span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>6. Critical & High Risk Details</h2>
+{% set critical_high = vulns | selectattr('risk_level', 'in', ['Critical', 'High']) | list %}
+{% if critical_high %}
+{% for v in critical_high %}
+<div class="risk-item risk-item-{{ v['risk_level']|lower }}">
+    <div class="risk-item-header">
+        <span class="badge badge-{{ v['risk_level']|lower }}">{{ v['risk_level'] }}</span>
+        <strong>{{ v['vuln_name'] }} ({{ v['vuln_code'] }})</strong>
+    </div>
+    <div><strong>Affected Asset:</strong> {{ v['asset_name'] }} &nbsp;|&nbsp; <strong>Risk Score:</strong> {{ v['risk_score'] }} ({{ v['likelihood'] }} × {{ v['impact'] }})</div>
+    <div class="risk-item-meta"><strong>Recommended Action:</strong> Apply vendor patches and security hardening. Enforce input validation, least-privilege access, and implement corresponding NIST CSF controls immediately.</div>
+</div>
+{% endfor %}
+{% else %}
+<p style="color:#6b7280;">No critical or high severity risks identified.</p>
+{% endif %}
+
+<h2>7. Asset Risk Exposure Summary</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Asset</th>
+            <th>Type</th>
+            <th>Criticality</th>
+            <th>C</th>
+            <th>I</th>
+            <th>A</th>
+            <th>Risks Mapped</th>
+            <th>Highest Risk</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for a in assets %}
+        {% set asset_vulns = vulns | selectattr('asset_name', 'equalto', a['name']) | list %}
+        {% set has_critical = asset_vulns | selectattr('risk_level', 'equalto', 'Critical') | list %}
+        {% set has_high = asset_vulns | selectattr('risk_level', 'equalto', 'High') | list %}
+        {% set highest = 'Critical' if has_critical else ('High' if has_high else ('Medium' if asset_vulns else '—')) %}
+        {% set badge_cls = 'badge-critical' if has_critical else ('badge-high' if has_high else ('badge-medium' if asset_vulns else '')) %}
+        <tr>
+            <td><strong>{{ a['name'] }}</strong></td>
+            <td>{{ a['asset_type'] }}</td>
+            <td>{{ '%.2f'|format(a['criticality_score']) }}</td>
+            <td>{{ a['confidentiality'] }}</td>
+            <td>{{ a['integrity'] }}</td>
+            <td>{{ a['availability'] }}</td>
+            <td style="text-align:center;">{{ asset_vulns|length }}</td>
+            <td>{% if badge_cls %}<span class="badge {{ badge_cls }}">{{ highest }}</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>8. Risk Treatment Plan</h2>
+<table class="treat-table">
+    <thead>
+        <tr>
+            <th>Risk Level</th>
+            <th>Count</th>
+            <th>Recommended Treatment</th>
+            <th>Target Timeline</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="badge badge-critical">Critical</span></td>
+            <td>{{ risk_counts.Critical }}</td>
+            <td>Immediate remediation required. Escalate to senior management. Apply emergency patches and access controls.</td>
+            <td><strong>Immediately (≤7 days)</strong></td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-high">High</span></td>
+            <td>{{ risk_counts.High }}</td>
+            <td>Prioritize remediation. Assign dedicated owners and track weekly. Apply compensating controls in interim.</td>
+            <td><strong>30 days</strong></td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-medium">Medium</span></td>
+            <td>{{ risk_counts.Medium }}</td>
+            <td>Plan and schedule remediation. Include in next sprint or security cycle. Monitor for escalation.</td>
+            <td><strong>90 days</strong></td>
+        </tr>
+        <tr>
+            <td><span class="badge badge-low">Low</span></td>
+            <td>{{ risk_counts.Low }}</td>
+            <td>Accept risk with documentation or address in routine maintenance cycle. Review annually.</td>
+            <td><strong>180 days</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>9. Risk Summary &amp; Conclusion</h2>
+<div class="opinion opinion-{{ opinion_class }}">
+    <strong>Risk Posture: {{ risk_posture }}</strong><br>
+    {% if risk_posture == 'Low Risk' %}
+    The organization demonstrates a well-controlled risk environment. Total risks: {{ vulns|length }}. No critical vulnerabilities detected. Continue monitoring and maintain current security controls.
+    {% elif risk_posture == 'Moderate Risk' %}
+    The organization carries moderate risk exposure with {{ risk_counts.High }} high-severity and {{ risk_counts.Medium }} medium-severity risks. Prioritized remediation within 90 days is recommended to prevent risk escalation.
+    {% else %}
+    The organization is exposed to significant risk. {{ risk_counts.Critical }} critical and {{ risk_counts.High }} high-severity risks are present. Immediate executive-level response and emergency remediation actions are required.
+    {% endif %}
+</div>
+
+<hr class="divider">
+<div class="footer">Generated by AuditShield — Risk Assessment Module &nbsp;·&nbsp; {{ report_date }}</div>
+
+</div>
+</body>
+</html>
