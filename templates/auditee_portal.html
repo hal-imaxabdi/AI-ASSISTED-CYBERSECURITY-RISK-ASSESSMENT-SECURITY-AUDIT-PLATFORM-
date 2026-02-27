@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Auditee Portal — AuditShield{% endblock %}
+{% block page_title %}Auditee Portal{% endblock %}
+{% block content %}
+
+<div class="panel" style="margin-bottom:1.5rem; background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); color: #e8f0fb; border:none;">
+    <div class="panel-body" style="display:flex; align-items:center; gap:1.25rem; padding:1.5rem;">
+        <div style="background:rgba(255,255,255,0.12); border-radius:50%; width:52px; height:52px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:600; flex-shrink:0;">
+            {{ session.get('full_name','U')[0] }}
+        </div>
+        <div>
+            <div style="font-size:1.1rem; font-weight:600;">Welcome, {{ session.get('full_name', 'Auditee') }}</div>
+            <div style="opacity:0.75; font-size:0.875rem; margin-top:0.2rem;">
+                {% if org %}Organization: <strong>{{ org['name'] }}</strong> · Sector: {{ org['industry'] }}{% else %}Organization profile not set up yet.{% endif %}
+            </div>
+            <div style="opacity:0.65; font-size:0.8rem; margin-top:0.2rem;">Your role: Auditee — you can add assets, upload evidence, and respond to findings.</div>
+        </div>
+    </div>
+</div>
+
+<div class="stats-grid" style="margin-bottom:1.5rem;">
+    <div class="stat-card">
+        <div class="stat-value">{{ assets|length }}</div>
+        <div class="stat-label">Registered Assets</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ pending_evidence|length }}</div>
+        <div class="stat-label">Controls Needing Evidence</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ findings_with_responses|length }}</div>
+        <div class="stat-label">Total Findings</div>
+    </div>
+    <div class="stat-card">
+        {% set responded = findings_with_responses | selectattr('responses') | list | length %}
+        <div class="stat-value">{{ responded }}</div>
+        <div class="stat-label">Findings Responded To</div>
+    </div>
+</div>
+
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header">
+        <h3>📋 Your Responsibilities</h3>
+    </div>
+    <div class="panel-body">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem;">
+            <div style="padding:1rem; background:var(--surface-2,#f8f9fa); border-radius:8px; border-left:3px solid #3b82f6;">
+                <div style="font-weight:600; margin-bottom:0.4rem;">① Register Assets</div>
+                <div style="font-size:0.83rem; color:var(--text-muted);">Add your systems, applications, and data to the asset inventory so the auditor can assess them.</div>
+                <a href="{{ url_for('assets') }}" class="btn btn-sm btn-outline" style="margin-top:0.75rem;">Go to Assets →</a>
+            </div>
+            <div style="padding:1rem; background:var(--surface-2,#f8f9fa); border-radius:8px; border-left:3px solid #8b5cf6;">
+                <div style="font-weight:600; margin-bottom:0.4rem;">② Upload Evidence</div>
+                <div style="font-size:0.83rem; color:var(--text-muted);">Upload screenshots, policy PDFs, and config exports for controls marked Non-Compliant or Partially Compliant.</div>
+                <a href="#evidence" class="btn btn-sm btn-outline" style="margin-top:0.75rem;">View Controls ↓</a>
+            </div>
+            <div style="padding:1rem; background:var(--surface-2,#f8f9fa); border-radius:8px; border-left:3px solid #f59e0b;">
+                <div style="font-weight:600; margin-bottom:0.4rem;">③ Respond to Findings</div>
+                <div style="font-size:0.83rem; color:var(--text-muted);">Review audit findings, add comments about remediation steps taken or planned timelines.</div>
+                <a href="#findings" class="btn btn-sm btn-outline" style="margin-top:0.75rem;">View Findings ↓</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<a name="evidence"></a>
+<div class="panel" style="margin-bottom:1.5rem;">
+    <div class="panel-header">
+        <h3>🔒 Controls Requiring Evidence</h3>
+        <span class="count-badge">{{ pending_evidence|length }}</span>
+    </div>
+    <div class="panel-body">
+        {% if pending_evidence %}
+        <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom:1rem;">
+            These controls were marked Non-Compliant or Partially Compliant by the auditor. Upload supporting documents to help resolve them.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+            {% for ctrl in pending_evidence %}
+            <div style="display:flex; align-items:center; gap:1rem; padding:0.875rem 1rem; background:var(--surface-2,#f8f9fa); border-radius:8px; border-left:3px solid {% if ctrl['status'] == 'Non Compliant' %}#ef4444{% else %}#f59e0b{% endif %};">
+                <div style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
+                        <code style="font-size:0.78rem; background:rgba(0,0,0,0.06); padding:1px 6px; border-radius:4px;">{{ ctrl['ctrl_code'] }}</code>
+                        <span class="badge badge-{{ 'critical' if ctrl['status'] == 'Non Compliant' else 'medium' }}" style="font-size:0.72rem;">{{ ctrl['status'] }}</span>
+                        <span style="font-size:0.75rem; color:var(--text-muted);">{{ ctrl['function_name'] }}</span>
+                    </div>
+                    <div style="font-size:0.875rem;">{{ ctrl['description'] }}</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">
+                        {% if ctrl['evidence_count'] > 0 %}
+                        ✅ {{ ctrl['evidence_count'] }} evidence file(s) already uploaded
+                        {% else %}
+                        ⚠️ No evidence uploaded yet
+                        {% endif %}
+                    </div>
+                </div>
+                <a href="{{ url_for('evidence', control_id=ctrl['control_id']) }}" class="btn btn-sm btn-primary" style="flex-shrink:0;">
+                    Upload Evidence
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <p>No controls currently require evidence from you. Check back after the auditor completes their assessment.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<a name="findings"></a>
+<div class="panel">
+    <div class="panel-header">
+        <h3>🔍 Audit Findings — Your Responses</h3>
+        <span class="count-badge">{{ findings_with_responses|length }}</span>
+    </div>
+    <div class="panel-body">
+        {% if findings_with_responses %}
+        <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom:1.25rem;">
+            Review each finding below. Use the response form to explain remediation steps taken, planned timelines, or to provide additional context.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:1.25rem;">
+        {% for item in findings_with_responses %}
+        {% set f = item['finding'] %}
+        {% set responses = item['responses'] %}
+        <div id="finding-{{ f['id'] }}" style="border:1px solid var(--border,#e2e8f0); border-radius:10px; overflow:hidden;">
+            <div style="padding:1rem; background:var(--surface-2,#f8f9fa); border-bottom:1px solid var(--border,#e2e8f0);">
+                <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                    <span class="badge badge-{{ f['risk_level']|lower }}">{{ f['risk_level'] }}</span>
+                    <strong style="font-size:0.95rem;">{{ f['title'] }}</strong>
+                    {% if f['control_ref'] %}<code style="font-size:0.75rem; background:rgba(0,0,0,0.06); padding:1px 6px; border-radius:4px;">{{ f['control_ref'] }}</code>{% endif %}
+                    <span style="font-size:0.75rem; color:var(--text-muted); margin-left:auto;">{{ f['created_at'][:10] }}</span>
+                </div>
+            </div>
+            <div style="padding:1rem; display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                <div>
+                    <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:0.3rem;">Issue</div>
+                    <div style="font-size:0.875rem;">{{ f['issue'] }}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:0.3rem;">Recommendation</div>
+                    <div style="font-size:0.875rem;">{{ f['recommendation'] }}</div>
+                </div>
+                {% if f['affected_asset'] %}
+                <div>
+                    <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:0.3rem;">Affected Asset</div>
+                    <div style="font-size:0.875rem;">{{ f['affected_asset'] }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if responses %}
+            <div style="padding:0 1rem 0.75rem; border-top:1px solid var(--border,#e2e8f0); margin-top:-0.25rem;">
+                <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); margin:0.75rem 0 0.5rem;">Previous Responses</div>
+                {% for r in responses %}
+                <div style="background:rgba(59,130,246,0.06); border-left:3px solid #3b82f6; border-radius:4px; padding:0.6rem 0.75rem; margin-bottom:0.5rem;">
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.25rem;">
+                        <strong>{{ r['full_name'] }}</strong> · {{ r['created_at'][:10] }}
+                    </div>
+                    <div style="font-size:0.875rem;">{{ r['comment'] }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div style="padding:1rem; background:rgba(0,0,0,0.02); border-top:1px solid var(--border,#e2e8f0);">
+                <div style="font-size:0.8rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-muted);">Add Your Response</div>
+                <form method="POST" action="{{ url_for('auditee_respond_finding', finding_id=f['id']) }}" style="display:flex; gap:0.5rem; align-items:flex-start;">
+                    <textarea name="comment" rows="2" class="form-input" placeholder="Describe remediation steps taken, planned timeline, or provide additional context…" required style="flex:1; resize:vertical; font-size:0.875rem;"></textarea>
+                    <button type="submit" class="btn btn-primary" style="flex-shrink:0; align-self:flex-end;">Submit</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <p>No audit findings have been generated yet. The auditor will create findings after completing the audit checklist assessment.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

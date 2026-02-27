@@ -25,6 +25,30 @@
             </div>
 
             <nav class="sidebar-nav">
+                {% if session.get('role') == 'auditee' %}
+                <div class="nav-section-label">My Audit Portal</div>
+                <a href="{{ url_for('auditee_portal') }}" class="nav-item {% if request.endpoint == 'auditee_portal' %}active{% endif %}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    My Dashboard
+                </a>
+
+                <div class="nav-section-label">Asset Information</div>
+                <a href="{{ url_for('assets') }}" class="nav-item {% if request.endpoint == 'assets' %}active{% endif %}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    Asset Inventory
+                </a>
+
+                <div class="nav-section-label">Audit Responses</div>
+                <a href="{{ url_for('auditee_portal') }}#findings" class="nav-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Respond to Findings
+                </a>
+                <a href="{{ url_for('auditee_portal') }}#evidence" class="nav-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload Evidence
+                </a>
+
+                {% else %}
                 <div class="nav-section-label">Overview</div>
                 <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -85,7 +109,7 @@
                     User Management
                 </a>
                 {% endif %}
-            </nav>
+                {% endif %}
 
             <div class="sidebar-footer">
                 <div class="user-info">

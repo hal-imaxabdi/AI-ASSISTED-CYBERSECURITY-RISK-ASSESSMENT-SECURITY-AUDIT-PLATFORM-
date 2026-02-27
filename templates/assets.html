@@ -3,7 +3,7 @@
 {% block page_title %}Asset Inventory{% endblock %}
 {% block content %}
 
-{% if session.get('role') in ['admin','auditor'] %}
+{% if session.get('role') in ['admin','auditor','auditee'] %}
 <div class="panel" style="margin-bottom:1.5rem;">
     <div class="panel-header">
         <h3>Register New Asset</h3>
@@ -12,7 +12,33 @@
         <form method="POST" class="form-grid">
             <div class="form-group">
                 <label class="form-label">Asset Name</label>
-                <input type="text" name="name" class="form-input" required placeholder="Student Information System">
+                <select name="name" class="form-input" required onchange="applyAssetSuggestion(this)">
+                    <option value="">— Select asset —</option>
+                    <optgroup label="Academic">
+                        <option value="Learning Management System" data-type="Web Application" data-owner="Academic IT" data-desc="Moodle/Canvas LMS for course delivery">Learning Management System</option>
+                        <option value="Student Information System" data-type="Database" data-owner="Registrar's Office" data-desc="Student records, grades, and enrollment data">Student Information System</option>
+                        <option value="Student Portal" data-type="Web Application" data-owner="IT Department" data-desc="Self-service student portal for registration and results">Student Portal</option>
+                        <option value="Library Management System" data-type="Software" data-owner="Library Services" data-desc="Catalogue, borrowing, and digital resources">Library Management System</option>
+                        <option value="E-Learning Repository" data-type="Cloud Service" data-owner="Academic IT" data-desc="Digital content and lecture recording storage">E-Learning Repository</option>
+                    </optgroup>
+                    <optgroup label="Infrastructure">
+                        <option value="Primary Email Server" data-type="Server" data-owner="IT Department" data-desc="University email (Exchange/Google Workspace)">Primary Email Server</option>
+                        <option value="Active Directory / LDAP" data-type="Server" data-owner="IT Department" data-desc="Centralized identity and access management">Active Directory / LDAP</option>
+                        <option value="Core Network Switch" data-type="Network Device" data-owner="Network Team" data-desc="Campus backbone switching infrastructure">Core Network Switch</option>
+                        <option value="Firewall" data-type="Network Device" data-owner="Network Team" data-desc="Perimeter network security device">Firewall</option>
+                        <option value="VPN Gateway" data-type="Network Device" data-owner="IT Department" data-desc="Remote access VPN for staff and students">VPN Gateway</option>
+                        <option value="Backup Server" data-type="Server" data-owner="IT Department" data-desc="Centralized backup and disaster recovery">Backup Server</option>
+                    </optgroup>
+                    <optgroup label="Finance & HR">
+                        <option value="Finance & Payroll System" data-type="Software" data-owner="Finance Department" data-desc="ERP/payroll system for staff and budgeting">Finance & Payroll System</option>
+                        <option value="HR Information System" data-type="Software" data-owner="HR Department" data-desc="Staff records, leave, and performance management">HR Information System</option>
+                        <option value="Procurement System" data-type="Web Application" data-owner="Finance Department" data-desc="Vendor and purchase order management">Procurement System</option>
+                    </optgroup>
+                    <optgroup label="Research & Data">
+                        <option value="Research Data Repository" data-type="Data/Information" data-owner="Research Office" data-desc="Institutional repository for research outputs">Research Data Repository</option>
+                        <option value="HPC Cluster" data-type="Server" data-owner="Research Computing" data-desc="High-performance computing for research workloads">HPC Cluster</option>
+                    </optgroup>
+                </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Asset Type</label>
@@ -31,31 +57,99 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Asset Owner</label>
-                <input type="text" name="owner" class="form-input" placeholder="IT Department">
+                <select name="owner" class="form-input">
+                    <option value="">— Select owner —</option>
+                    <optgroup label="IT & Infrastructure">
+                        <option>IT Department</option>
+                        <option>IT Centre</option>
+                        <option>IT Division</option>
+                        <option>Network Team</option>
+                        <option>Cybersecurity Unit</option>
+                        <option>Systems Administration</option>
+                        <option>Research Computing</option>
+                    </optgroup>
+                    <optgroup label="Academic">
+                        <option>Academic IT</option>
+                        <option>Registrar's Office</option>
+                        <option>Library Services</option>
+                        <option>Faculty of Engineering</option>
+                        <option>Faculty of Computing</option>
+                        <option>Centre for e-Learning</option>
+                    </optgroup>
+                    <optgroup label="Administration">
+                        <option>Finance Department</option>
+                        <option>HR Department</option>
+                        <option>Procurement Office</option>
+                        <option>Research Office</option>
+                        <option>Student Affairs</option>
+                        <option>Vice Chancellor's Office</option>
+                    </optgroup>
+                </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Location</label>
-                <input type="text" name="location" class="form-input" placeholder="Data Center / Cloud / Building A">
+                <select name="location" class="form-input">
+                    <option value="">— Select location —</option>
+                    <optgroup label="On-Premise">
+                        <option>Main Data Centre</option>
+                        <option>Secondary Data Centre</option>
+                        <option>Server Room — Admin Block</option>
+                        <option>Server Room — Faculty Block</option>
+                        <option>Network Operations Centre</option>
+                    </optgroup>
+                    <optgroup label="Cloud">
+                        <option>AWS Cloud</option>
+                        <option>Microsoft Azure</option>
+                        <option>Google Cloud Platform</option>
+                        <option>Private Cloud</option>
+                        <option>Hybrid Cloud</option>
+                    </optgroup>
+                    <optgroup label="Campus Buildings">
+                        <option>Main Campus — Building A</option>
+                        <option>Main Campus — Building B</option>
+                        <option>Library Building</option>
+                        <option>Administration Building</option>
+                        <option>Research Block</option>
+                        <option>Student Centre</option>
+                    </optgroup>
+                    <optgroup label="Remote">
+                        <option>Branch Campus</option>
+                        <option>Off-site Backup Facility</option>
+                        <option>Third-party Hosted</option>
+                    </optgroup>
+                </select>
             </div>
             <div class="form-group form-full">
                 <label class="form-label">Description</label>
                 <input type="text" name="description" class="form-input" placeholder="Brief description of the asset...">
             </div>
             <div class="form-group">
-                <label class="form-label">Confidentiality (C) <span class="cia-hint">1–5</span></label>
-                <input type="number" name="confidentiality" class="form-input" min="1" max="5" value="3" id="c-val" oninput="updateCIA()">
+                <label class="form-label">Confidentiality (C)</label>
+                <select name="confidentiality" id="c-val" class="form-input" onchange="updateCIA()">
+                    <option value="1">Low</option>
+                    <option value="3" selected>Medium</option>
+                    <option value="5">High</option>
+                </select>
             </div>
             <div class="form-group">
-                <label class="form-label">Integrity (I) <span class="cia-hint">1–5</span></label>
-                <input type="number" name="integrity" class="form-input" min="1" max="5" value="3" id="i-val" oninput="updateCIA()">
+                <label class="form-label">Integrity (I)</label>
+                <select name="integrity" id="i-val" class="form-input" onchange="updateCIA()">
+                    <option value="1">Low</option>
+                    <option value="3" selected>Medium</option>
+                    <option value="5">High</option>
+                </select>
             </div>
             <div class="form-group">
-                <label class="form-label">Availability (A) <span class="cia-hint">1–5</span></label>
-                <input type="number" name="availability" class="form-input" min="1" max="5" value="3" id="a-val" oninput="updateCIA()">
+                <label class="form-label">Availability (A)</label>
+                <select name="availability" id="a-val" class="form-input" onchange="updateCIA()">
+                    <option value="1">Low</option>
+                    <option value="3" selected>Medium</option>
+                    <option value="5">High</option>
+                </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Criticality Score</label>
-                <div class="cia-preview" id="cia-preview">3.00</div>
+                <div class="cia-preview" id="cia-preview">1.80</div>
                 <div class="cia-formula">= avg(C,I,A) × max(C,I,A) / 5</div>
             </div>
             <div class="form-group form-full">
@@ -82,7 +176,7 @@
                     <th>Location</th>
                     <th>C</th><th>I</th><th>A</th>
                     <th>Criticality</th>
-                    {% if session.get('role') in ['admin','auditor'] %}<th>Actions</th>{% endif %}
+                    {% if session.get('role') in ['admin','auditor','auditee'] %}<th>Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -95,22 +189,26 @@
                     <td><span class="tag">{{ a['asset_type'] }}</span></td>
                     <td>{{ a['owner'] or '—' }}</td>
                     <td>{{ a['location'] or '—' }}</td>
-                    <td class="center">{{ a['confidentiality'] }}</td>
-                    <td class="center">{{ a['integrity'] }}</td>
-                    <td class="center">{{ a['availability'] }}</td>
+                    <td class="center">{% if a['confidentiality'] >= 5 %}High{% elif a['confidentiality'] >= 3 %}Medium{% else %}Low{% endif %}</td>
+                    <td class="center">{% if a['integrity'] >= 5 %}High{% elif a['integrity'] >= 3 %}Medium{% else %}Low{% endif %}</td>
+                    <td class="center">{% if a['availability'] >= 5 %}High{% elif a['availability'] >= 3 %}Medium{% else %}Low{% endif %}</td>
                     <td>
                         {% set score = a['criticality_score'] %}
                         <div class="criticality-display">
                             <span class="criticality-score {% if score >= 4 %}crit-high{% elif score >= 2.5 %}crit-med{% else %}crit-low{% endif %}">{{ '%.2f'|format(score) }}</span>
                         </div>
                     </td>
-                    {% if session.get('role') in ['admin','auditor'] %}
+                    {% if session.get('role') in ['admin','auditor','auditee'] %}
                     <td>
+                        {% if session.get('role') in ['admin','auditor'] %}
                         <form method="POST" action="{{ url_for('delete_asset', aid=a['id']) }}" onsubmit="return confirm('Delete this asset and its vulnerabilities?')">
                             <button type="submit" class="btn-icon danger">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
                             </button>
                         </form>
+                        {% else %}
+                        <span class="text-muted" style="font-size:0.75rem;">view only</span>
+                        {% endif %}
                     </td>
                     {% endif %}
                 </tr>
@@ -137,6 +235,27 @@ function updateCIA() {
     const maxVal = Math.max(c, i, a);
     const score = (avg * (maxVal / 5)).toFixed(2);
     document.getElementById('cia-preview').textContent = score;
+}
+
+function applyAssetSuggestion(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt.value) return;
+
+    const typeSelect = document.querySelector('select[name="asset_type"]');
+    const typeVal = opt.dataset.type || '';
+    for (let o of typeSelect.options) {
+        if (o.value === typeVal || o.text === typeVal) { o.selected = true; break; }
+    }
+
+    const ownerSelect = document.querySelector('select[name="owner"]');
+    if (ownerSelect && opt.dataset.owner) {
+        for (let o of ownerSelect.options) {
+            if (o.value === opt.dataset.owner || o.text === opt.dataset.owner) { o.selected = true; break; }
+        }
+    }
+
+    const descField = document.querySelector('input[name="description"]');
+    if (descField && opt.dataset.desc) descField.value = opt.dataset.desc;
 }
 </script>
 {% endblock %}

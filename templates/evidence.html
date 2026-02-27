@@ -19,13 +19,17 @@
             </div>
             {% else %}
             <div class="info-box info-yellow" style="margin-top:1rem;">
+                {% if session.get('role') == 'auditee' %}
+                This control has not been assessed yet by the auditor. Evidence cannot be uploaded until the auditor assesses this control.
+                {% else %}
                 This control has not been assessed yet. Please assess it in the <a href="{{ url_for('audit_checklist') }}">Audit Checklist</a> before uploading evidence.
+                {% endif %}
             </div>
             {% endif %}
         </div>
     </div>
 
-    {% if audit_result and session.get('role') in ['admin','auditor'] %}
+    {% if audit_result and session.get('role') in ['admin','auditor','auditee'] %}
     <div class="panel">
         <div class="panel-header">
             <h3>Upload Evidence</h3>

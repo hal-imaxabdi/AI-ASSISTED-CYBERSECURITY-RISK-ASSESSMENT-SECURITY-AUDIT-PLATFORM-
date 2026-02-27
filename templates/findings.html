@@ -80,6 +80,12 @@
             </div>
         </div>
         <div class="finding-footer">
+            {% if response_counts and response_counts.get(f['id'], 0) > 0 %}
+            <button class="btn btn-sm btn-outline" onclick="loadResponses({{ f['id'] }}, this)" style="margin-right:0.5rem;">
+                💬 {{ response_counts[f['id']] }} auditee response(s)
+            </button>
+            <div id="responses-{{ f['id'] }}" style="display:none; margin:0.75rem 0; padding:0.75rem; background:rgba(59,130,246,0.06); border-radius:6px; font-size:0.875rem;"></div>
+            {% endif %}
             <form method="POST" onsubmit="return confirm('Delete this finding?')">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="finding_id" value="{{ f['id'] }}">
@@ -96,4 +102,29 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function loadResponses(findingId, btn) {
+    const container = document.getElementById('responses-' + findingId);
+    if (container.style.display !== 'none') {
+        container.style.display = 'none';
+        return;
+    }
+    fetch('/findings/responses/' + findingId)
+        .then(r => r.json())
+        .then(data => {
+            let html = '<strong style="font-size:0.8rem;">Auditee Responses for: ' + data.finding_title + '</strong><div style="margin-top:0.5rem;">';
+            data.responses.forEach(r => {
+                html += '<div style="border-left:3px solid #3b82f6; padding:0.5rem 0.75rem; margin-bottom:0.5rem; background:white; border-radius:0 4px 4px 0;">';
+                html += '<div style="font-size:0.75rem; color:#666;">' + r.author + ' (' + r.role + ') · ' + r.date + '</div>';
+                html += '<div style="margin-top:0.25rem;">' + r.comment + '</div></div>';
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            container.style.display = 'block';
+        });
+}
+</script>
 {% endblock %}

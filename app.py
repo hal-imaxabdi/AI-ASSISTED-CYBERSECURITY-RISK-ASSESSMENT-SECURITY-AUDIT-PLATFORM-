@@ -145,8 +145,24 @@ def init_db():
             vuln_ref TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS finding_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            finding_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(finding_id) REFERENCES findings(id),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS auditee_org (
+            auditee_id INTEGER NOT NULL,
+            organization_id INTEGER NOT NULL,
+            PRIMARY KEY(auditee_id, organization_id),
+            FOREIGN KEY(auditee_id) REFERENCES users(id),
+            FOREIGN KEY(organization_id) REFERENCES organization(id)
+        );
     ''')
-    
+
     admin_exists = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not admin_exists:
         pw = hashlib.sha256('admin123'.encode()).hexdigest()
@@ -215,7 +231,7 @@ def init_db():
             ('Recover','Communications','Recovery Communication','RC.CO-3','Recovery activities are communicated to internal and external stakeholders'),
         ]
         db.executemany('INSERT INTO controls (function_name, category, subcategory, control_id, description) VALUES (?,?,?,?,?)', nist_controls)
-    
+
     db.commit()
     db.close()
 
@@ -436,6 +452,8 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    if session.get('role') == 'auditee':
+        return redirect(url_for('auditee_portal'))
     db = get_db()
     assets_count = db.execute('SELECT COUNT(*) FROM assets').fetchone()[0]
     vulns_count = db.execute('SELECT COUNT(*) FROM vulnerabilities').fetchone()[0]
@@ -451,7 +469,7 @@ def dashboard():
     recent_findings = db.execute('SELECT * FROM findings ORDER BY created_at DESC LIMIT 5').fetchall()
     risk_distribution = db.execute("SELECT risk_level, COUNT(*) as cnt FROM vulnerabilities GROUP BY risk_level").fetchall()
     function_compliance = db.execute("""
-        SELECT c.function_name, 
+        SELECT c.function_name,
                COUNT(ar.id) as assessed,
                SUM(CASE WHEN ar.status='Compliant' THEN 1 ELSE 0 END) as compliant_count
         FROM controls c
@@ -460,7 +478,7 @@ def dashboard():
         GROUP BY c.function_name
     """).fetchall()
     db.close()
-    return render_template('dashboard.html', 
+    return render_template('dashboard.html',
         assets_count=assets_count, vulns_count=vulns_count,
         controls_count=controls_count, assessed=assessed,
         compliance_pct=compliance_pct, findings_count=findings_count,
@@ -533,7 +551,7 @@ def organization():
 @login_required
 def assets():
     db = get_db()
-    if request.method == 'POST' and session['role'] in ('admin','auditor'):
+    if request.method == 'POST' and session['role'] in ('admin','auditor','auditee'):
         name = request.form['name']
         asset_type = request.form['asset_type']
         description = request.form['description']
@@ -737,11 +755,11 @@ def audit_checklist():
         flash('Control assessment saved.', 'success')
         db.close()
         return redirect(url_for('audit_checklist'))
-    
+
     controls = db.execute('SELECT * FROM controls ORDER BY function_name, category').fetchall()
     results = db.execute('SELECT * FROM audit_results').fetchall()
     result_map = {r['control_id']: r for r in results}
-    
+
     grouped = {}
     for c in controls:
         fn = c['function_name']
@@ -751,7 +769,7 @@ def audit_checklist():
         if cat not in grouped[fn]:
             grouped[fn][cat] = []
         grouped[fn][cat].append((c, result_map.get(c['id'])))
-    
+
     total = len(controls)
     compliant = sum(1 for r in results if r['status'] == 'Compliant')
     partial = sum(1 for r in results if r['status'] == 'Partially Compliant')
@@ -759,7 +777,7 @@ def audit_checklist():
     na = sum(1 for r in results if r['status'] == 'Not Applicable')
     assessed_total = compliant + partial + non_compliant
     compliance_pct = round((compliant / assessed_total * 100), 1) if assessed_total > 0 else 0
-    
+
     db.close()
     return render_template('audit_checklist.html', grouped=grouped, result_map=result_map,
                            total=total, compliant=compliant, partial=partial,
@@ -769,7 +787,7 @@ def audit_checklist():
 @login_required
 def evidence(control_id):
     db = get_db()
-    if request.method == 'POST' and session['role'] in ('admin','auditor'):
+    if request.method == 'POST' and session['role'] in ('admin','auditor','auditee'):
         audit_result = db.execute('SELECT id FROM audit_results WHERE control_id=?', (control_id,)).fetchone()
         if not audit_result:
             flash('Please assess this control before uploading evidence.', 'error')
@@ -791,7 +809,7 @@ def evidence(control_id):
                 flash('Evidence uploaded successfully.', 'success')
             else:
                 flash('File type not allowed.', 'error')
-    
+
     control = db.execute('SELECT * FROM controls WHERE id=?', (control_id,)).fetchone()
     audit_result = db.execute('SELECT * FROM audit_results WHERE control_id=?', (control_id,)).fetchone()
     evidence_files = []
@@ -827,14 +845,14 @@ def compliance():
     db = get_db()
     results = db.execute('SELECT * FROM audit_results').fetchall()
     controls = db.execute('SELECT * FROM controls').fetchall()
-    
+
     compliant = sum(1 for r in results if r['status'] == 'Compliant')
     partial = sum(1 for r in results if r['status'] == 'Partially Compliant')
     non_compliant = sum(1 for r in results if r['status'] == 'Non Compliant')
     na = sum(1 for r in results if r['status'] == 'Not Applicable')
     assessed = compliant + partial + non_compliant
     compliance_pct = round((compliant / assessed * 100), 1) if assessed > 0 else 0
-    
+
     function_stats = db.execute("""
         SELECT c.function_name,
                COUNT(DISTINCT c.id) as total_controls,
@@ -847,9 +865,9 @@ def compliance():
         GROUP BY c.function_name
         ORDER BY c.function_name
     """).fetchall()
-    
+
     db.close()
-    return render_template('compliance.html', 
+    return render_template('compliance.html',
         compliant=compliant, partial=partial, non_compliant=non_compliant,
         na=na, assessed=assessed, compliance_pct=compliance_pct,
         total_controls=len(controls), function_stats=function_stats)
@@ -872,7 +890,7 @@ def findings():
                 JOIN assets a ON v.asset_id = a.id
                 WHERE v.risk_level IN ('Critical','High')
             """).fetchall()
-            
+
             for ctrl in non_compliant_controls:
                 existing = db.execute('SELECT id FROM findings WHERE control_ref=?', (ctrl['control_id'],)).fetchone()
                 if not existing:
@@ -881,7 +899,7 @@ def findings():
                                (f"Control Gap: {ctrl['control_id']}",
                                 f"Control '{ctrl['description']}' is not fully compliant. Notes: {ctrl['notes'] or 'None'}",
                                 'High', ctrl['category'], rec, ctrl['control_id']))
-            
+
             for vuln in high_vulns:
                 existing = db.execute('SELECT id FROM findings WHERE vuln_ref=?', (vuln['vuln_code'],)).fetchone()
                 if not existing:
@@ -891,7 +909,7 @@ def findings():
                                 vuln['risk_level'], vuln['asset_name'],
                                 f"Remediate {vuln['vuln_name']} ({vuln['vuln_code']}) by implementing appropriate security controls and patching.",
                                 vuln['vuln_code']))
-            
+
             db.commit()
             flash('Findings generated automatically.', 'success')
         elif action == 'add':
@@ -906,17 +924,21 @@ def findings():
             flash('Finding deleted.', 'success')
         db.close()
         return redirect(url_for('findings'))
-    
+
     all_findings = db.execute('SELECT * FROM findings ORDER BY CASE risk_level WHEN "Critical" THEN 1 WHEN "High" THEN 2 WHEN "Medium" THEN 3 ELSE 4 END').fetchall()
+    response_counts = {}
+    for f in all_findings:
+        count = db.execute('SELECT COUNT(*) FROM finding_responses WHERE finding_id=?', (f['id'],)).fetchone()[0]
+        response_counts[f['id']] = count
     db.close()
-    return render_template('findings.html', findings=all_findings)
+    return render_template('findings.html', findings=all_findings, response_counts=response_counts)
 
 @app.route('/ai-explainer', methods=['GET','POST'])
 @login_required
 def ai_explainer():
     db = get_db()
     assets_list = db.execute('SELECT id, name FROM assets').fetchall()
-    vulns = db.execute('''SELECT v.*, a.name as asset_name FROM vulnerabilities v 
+    vulns = db.execute('''SELECT v.*, a.name as asset_name FROM vulnerabilities v
                           JOIN assets a ON v.asset_id=a.id ORDER BY v.risk_score DESC''').fetchall()
     explanation = None
     selected_vuln = None
@@ -946,18 +968,18 @@ def report():
     db = get_db()
     org = db.execute('SELECT * FROM organization ORDER BY id DESC LIMIT 1').fetchone()
     assets = db.execute('SELECT * FROM assets ORDER BY criticality_score DESC').fetchall()
-    vulns = db.execute('''SELECT v.*, a.name as asset_name FROM vulnerabilities v 
+    vulns = db.execute('''SELECT v.*, a.name as asset_name FROM vulnerabilities v
                           JOIN assets a ON v.asset_id=a.id ORDER BY v.risk_score DESC''').fetchall()
-    findings = db.execute('''SELECT * FROM findings ORDER BY 
+    findings = db.execute('''SELECT * FROM findings ORDER BY
                              CASE risk_level WHEN "Critical" THEN 1 WHEN "High" THEN 2 WHEN "Medium" THEN 3 ELSE 4 END''').fetchall()
-    
+
     results = db.execute('SELECT * FROM audit_results').fetchall()
     compliant = sum(1 for r in results if r['status'] == 'Compliant')
     partial = sum(1 for r in results if r['status'] == 'Partially Compliant')
     non_compliant = sum(1 for r in results if r['status'] == 'Non Compliant')
     assessed = compliant + partial + non_compliant
     compliance_pct = round((compliant / assessed * 100), 1) if assessed > 0 else 0
-    
+
     function_stats = db.execute("""
         SELECT c.function_name,
                COUNT(DISTINCT c.id) as total,
@@ -965,7 +987,7 @@ def report():
         FROM controls c LEFT JOIN audit_results ar ON c.id=ar.control_id
         GROUP BY c.function_name ORDER BY c.function_name
     """).fetchall()
-    
+
     critical_count = sum(1 for v in vulns if v['risk_level'] == 'Critical')
     high_count = sum(1 for v in vulns if v['risk_level'] == 'High')
 
@@ -979,7 +1001,6 @@ def report():
         ORDER BY c.control_id, e.uploaded_at
     ''').fetchall()
 
-    # Build AI recommendations
     ai_recs = []
     seen_vulns = set()
     for v in vulns:
@@ -1020,7 +1041,7 @@ def report():
     else:
         final_opinion = 'Needs Immediate Action'
         opinion_class = 'danger'
-    
+
     db.close()
     return render_template('report.html', org=org, assets=assets, vulns=vulns,
                            findings=findings, compliance_pct=compliance_pct,
@@ -1067,7 +1088,6 @@ def export_report_pdf():
     """).fetchall()
     critical_count = sum(1 for v in vulns if v['risk_level'] == 'Critical')
     high_count = sum(1 for v in vulns if v['risk_level'] == 'High')
-    # Fetch evidence grouped by control
     evidence_rows = db.execute('''
         SELECT e.*, c.control_id as ctrl_ref, c.description as ctrl_desc,
                ar.status as ctrl_status, u.full_name
@@ -1089,7 +1109,6 @@ def export_report_pdf():
     report_date = datetime.now().strftime('%B %d, %Y')
     org_name = org['name'] if org else 'University IT System'
 
-    # ── Color palette ──────────────────────────────────────────────
     NAVY       = colors.HexColor('#0f1729')
     BLUE       = colors.HexColor('#2563eb')
     LIGHT_BLUE = colors.HexColor('#eff6ff')
@@ -1114,7 +1133,6 @@ def export_report_pdf():
     def risk_bg(level):
         return {'Critical': RED_BG, 'High': ORANGE_BG, 'Medium': YELLOW_BG, 'Low': GREEN_BG}.get(level, GRAY_BG)
 
-    # ── Styles ─────────────────────────────────────────────────────
     base = getSampleStyleSheet()
 
     def S(name, **kw):
@@ -1160,14 +1178,12 @@ def export_report_pdf():
                             topMargin=MARGIN, bottomMargin=MARGIN,
                             title=f'Cybersecurity Audit Report — {org_name}')
 
-    # ── Page template with header/footer ──────────────────────────
     def on_page(canvas, doc):
         canvas.saveState()
         page_num = doc.page
         if page_num == 1:
             canvas.restoreState()
             return
-        # Header bar
         canvas.setFillColor(NAVY)
         canvas.rect(MARGIN, H - 1.4*cm, CONTENT_W, 0.55*cm, fill=1, stroke=0)
         canvas.setFillColor(WHITE)
@@ -1175,7 +1191,6 @@ def export_report_pdf():
         canvas.drawString(MARGIN + 4, H - 1.08*cm, 'CYBERSECURITY AUDIT REPORT')
         canvas.setFont('Helvetica', 7)
         canvas.drawRightString(W - MARGIN - 4, H - 1.08*cm, org_name.upper())
-        # Footer
         canvas.setFillColor(GRAY_LINE)
         canvas.rect(MARGIN, 1.1*cm, CONTENT_W, 0.03*cm, fill=1, stroke=0)
         canvas.setFillColor(GRAY_MUTED)
@@ -1186,27 +1201,19 @@ def export_report_pdf():
 
     story = []
 
-    # ══════════════════════════════════════════════════
-    # COVER PAGE
-    # ══════════════════════════════════════════════════
     def cover_page(canvas, doc):
         on_page(canvas, doc)
         if doc.page != 1:
             return
         canvas.saveState()
-        # Full navy background
         canvas.setFillColor(NAVY)
         canvas.rect(0, 0, W, H, fill=1, stroke=0)
-        # Blue accent bar top
         canvas.setFillColor(BLUE)
         canvas.rect(0, H - 0.6*cm, W, 0.6*cm, fill=1, stroke=0)
-        # Decorative rectangle
         canvas.setFillColor(colors.HexColor('#1e3a5f'))
         canvas.rect(0, H * 0.38, W, H * 0.52, fill=1, stroke=0)
-        # Side accent line
         canvas.setFillColor(BLUE)
         canvas.rect(MARGIN, H * 0.20, 0.18*cm, H * 0.68, fill=1, stroke=0)
-        # Organization label
         canvas.setFillColor(colors.HexColor('#1e3a5f'))
         canvas.rect(MARGIN + 0.5*cm, H * 0.82, CONTENT_W * 0.7, 0.7*cm, fill=1, stroke=0)
         canvas.setFillColor(colors.HexColor('#93c5fd'))
@@ -1215,25 +1222,21 @@ def export_report_pdf():
         canvas.setFillColor(WHITE)
         canvas.setFont('Helvetica-Bold', 11)
         canvas.drawString(MARGIN + 0.9*cm, H * 0.835 - 8, org_name)
-        # Main title
         canvas.setFillColor(WHITE)
         canvas.setFont('Helvetica-Bold', 30)
         canvas.drawString(MARGIN + 0.5*cm, H * 0.66, 'Cybersecurity')
         canvas.setFont('Helvetica', 28)
         canvas.drawString(MARGIN + 0.5*cm, H * 0.60, 'Audit Report')
-        # Framework badge
         canvas.setFillColor(BLUE)
         canvas.roundRect(MARGIN + 0.5*cm, H * 0.535, 5.5*cm, 0.55*cm, 4, fill=1, stroke=0)
         canvas.setFillColor(WHITE)
         canvas.setFont('Helvetica-Bold', 8)
         canvas.drawString(MARGIN + 0.9*cm, H * 0.555, 'NIST Cybersecurity Framework 2.0')
-        # Date & classification row
         canvas.setFillColor(GRAY_MUTED)  # use HexColor
         canvas.setFillColor(colors.HexColor('#94a3b8'))
         canvas.setFont('Helvetica', 8)
         canvas.drawString(MARGIN + 0.5*cm, H * 0.49, f'Report Date: {report_date}')
         canvas.drawString(MARGIN + 0.5*cm, H * 0.465, 'Classification: Confidential')
-        # Opinion box
         op_colors = {'Secure': (GREEN, GREEN_BG), 'Acceptable Risk': (YELLOW, YELLOW_BG), 'Needs Immediate Action': (RED, RED_BG)}
         op_col, op_bg = op_colors.get(final_opinion, (BLUE, LIGHT_BLUE))
         canvas.setFillColor(op_col)
@@ -1243,7 +1246,6 @@ def export_report_pdf():
         canvas.drawString(MARGIN + 1.0*cm, H * 0.25 + 1.15*cm, 'FINAL AUDIT OPINION')
         canvas.setFont('Helvetica-Bold', 16)
         canvas.drawString(MARGIN + 1.0*cm, H * 0.25 + 0.45*cm, final_opinion)
-        # KPI boxes bottom
         kpis = [
             (str(len(assets)), 'Assets'),
             (str(len(vulns)), 'Vulnerabilities'),
@@ -1266,9 +1268,6 @@ def export_report_pdf():
     story.append(Spacer(1, H - 4*MARGIN))  # fill cover page
     story.append(PageBreak())
 
-    # ══════════════════════════════════════════════════
-    # SECTION HELPER
-    # ══════════════════════════════════════════════════
     def section_title(num, title):
         elems = []
         elems.append(Spacer(1, 0.3*cm))
@@ -1319,9 +1318,6 @@ def export_report_pdf():
             ]
         return TableStyle(style)
 
-    # ══════════════════════════════════════════════════
-    # 1. EXECUTIVE SUMMARY
-    # ══════════════════════════════════════════════════
     story += section_title('1', 'Executive Summary')
     story.append(Paragraph(
         f'This report presents the findings of a cybersecurity audit conducted on <b>{org_name}</b> '
@@ -1345,7 +1341,6 @@ def export_report_pdf():
     ]))
     story.append(Spacer(1, 0.4*cm))
 
-    # Opinion box
     op_col = {'Secure': GREEN, 'Acceptable Risk': YELLOW, 'Needs Immediate Action': RED}.get(final_opinion, BLUE)
     op_desc = {
         'Secure': f'The organization demonstrates strong security posture with {compliance_pct}% NIST CSF compliance and no critical vulnerabilities.',
@@ -1373,9 +1368,6 @@ def export_report_pdf():
     ]))
     story.append(op_t)
 
-    # ══════════════════════════════════════════════════
-    # 2. SCOPE
-    # ══════════════════════════════════════════════════
     story += section_title('2', 'Scope of Audit')
     scope_rows = [
         [Paragraph('Organization', sBold), Paragraph(org_name, sBody)],
@@ -1401,9 +1393,6 @@ def export_report_pdf():
     ]))
     story.append(scope_t)
 
-    # ══════════════════════════════════════════════════
-    # 3. METHODOLOGY
-    # ══════════════════════════════════════════════════
     story += section_title('3', 'Audit Methodology')
     story.append(Paragraph(
         'This audit follows the structured workflow of the NIST Cybersecurity Framework (CSF) 2.0, '
@@ -1440,9 +1429,6 @@ def export_report_pdf():
         ]))
         story.append(mt)
 
-    # ══════════════════════════════════════════════════
-    # 4. ASSET INVENTORY
-    # ══════════════════════════════════════════════════
     story.append(PageBreak())
     story += section_title('4', 'Asset Inventory')
     story.append(Paragraph(
@@ -1480,9 +1466,6 @@ def export_report_pdf():
     else:
         story.append(Paragraph('No assets have been registered.', sSmall))
 
-    # ══════════════════════════════════════════════════
-    # 5. RISK ASSESSMENT RESULTS
-    # ══════════════════════════════════════════════════
     story.append(PageBreak())
     story += section_title('5', 'Risk Assessment Results')
 
@@ -1558,16 +1541,12 @@ def export_report_pdf():
         vt = Table(vuln_rows, colWidths=[4*cm, 2*cm, 3.2*cm, 1.3*cm, 1.1*cm, 1.1*cm, 1.5*cm],
                    repeatRows=1)
         vt.setStyle(table_style())
-        # Color level column rows
         for i, v in enumerate(vulns, start=1):
             vt.setStyle(TableStyle([('BACKGROUND', (6,i), (6,i), risk_bg(v['risk_level']))]))
         story.append(vt)
     else:
         story.append(Paragraph('No vulnerabilities have been recorded.', sSmall))
 
-    # ══════════════════════════════════════════════════
-    # 6. COMPLIANCE RESULTS
-    # ══════════════════════════════════════════════════
     story.append(PageBreak())
     story += section_title('6', 'Compliance Assessment Results')
     story.append(Paragraph(
@@ -1639,9 +1618,6 @@ def export_report_pdf():
     fnt.setStyle(table_style())
     story.append(fnt)
 
-    # ══════════════════════════════════════════════════
-    # 7. AUDIT FINDINGS
-    # ══════════════════════════════════════════════════
     story.append(PageBreak())
     story += section_title('7', 'Audit Findings')
     story.append(Paragraph(
@@ -1709,9 +1685,6 @@ def export_report_pdf():
     else:
         story.append(Paragraph('No findings have been recorded.', sSmall))
 
-    # ══════════════════════════════════════════════════
-    # 8. AUDIT EVIDENCE
-    # ══════════════════════════════════════════════════
     story.append(PageBreak())
     story += section_title('8', 'Audit Evidence')
     story.append(Paragraph(
@@ -1722,7 +1695,6 @@ def export_report_pdf():
 
     if evidence_rows:
         import os as _os
-        # Group by control
         ctrl_groups = {}
         for ev in evidence_rows:
             key = ev['ctrl_ref']
@@ -1793,9 +1765,6 @@ def export_report_pdf():
 
     story.append(Spacer(1, 0.3*cm))
 
-    # ══════════════════════════════════════════════════
-    # 9. AI RECOMMENDATIONS
-    # ══════════════════════════════════════════════════
     story.append(PageBreak())
     story += section_title('9', 'AI Recommendations')
     story.append(Paragraph(
@@ -1804,9 +1773,7 @@ def export_report_pdf():
         sBody))
     story.append(Spacer(1, 0.2*cm))
 
-    # Pull cached AI explanations for vulns that appear in findings
     ai_recs = []
-    # 1. Add cached AI explanations for high/critical vulns
     seen_vulns = set()
     for v in vulns:
         if v['risk_level'] in ('Critical', 'High') and v['vuln_name'] not in seen_vulns:
@@ -1820,7 +1787,6 @@ def export_report_pdf():
                         f"Recommended Action: Apply vendor patches, enforce input validation, and implement security controls "
                         f"per NIST CSF to mitigate exposure. Verify remediation with a follow-up scan.",
             })
-    # 2. Add rule-based recommendations from non-compliant controls
     for f in findings:
         if f['control_ref'] and f['risk_level'] in ('Critical', 'High', 'Medium'):
             ai_recs.append({
@@ -1829,7 +1795,6 @@ def export_report_pdf():
                 'body': f"Issue: {f['issue']}  Affected Asset: {f['affected_asset'] or 'N/A'}.  "
                         f"AI Recommendation: {f['recommendation']}",
             })
-    # 3. Overall posture recommendation
     if compliance_pct < 80:
         ai_recs.append({
             'level': 'High' if compliance_pct < 60 else 'Medium',
@@ -1838,7 +1803,6 @@ def export_report_pdf():
                     f"in the Protect and Detect functions first. (2) Assign control owners and set remediation deadlines. "
                     f"(3) Schedule a follow-up audit within 90 days to verify improvement.",
         })
-    # Sort by severity
     sev_order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3}
     ai_recs.sort(key=lambda x: sev_order.get(x['level'], 4))
 
@@ -1879,9 +1843,6 @@ def export_report_pdf():
 
     story.append(Spacer(1, 0.3*cm))
 
-    # ══════════════════════════════════════════════════
-    # 10. FINAL OPINION
-    # ══════════════════════════════════════════════════
     story += section_title('10', 'Final Audit Opinion')
     story.append(Paragraph(
         'Based on the risk assessment findings and compliance evaluation conducted against the '
@@ -1936,7 +1897,6 @@ def export_report_pdf():
     story.append(fot)
     story.append(Spacer(1, 0.5*cm))
 
-    # ── Build PDF ─────────────────────────────────────
     doc.build(story, onFirstPage=cover_page, onLaterPages=on_page)
     buffer.seek(0)
     filename = f"Audit_Report_{org_name.replace(' ','_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -1960,6 +1920,73 @@ def explain(vuln_name):
         return jsonify({'error': 'Cannot connect to Ollama. Make sure Ollama is running: run `ollama serve` in a terminal, then ensure phi3:mini is available via `ollama list`.'}), 503
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/auditee/portal')
+@login_required
+@role_required('auditee')
+def auditee_portal():
+    db = get_db()
+    assets = db.execute('SELECT * FROM assets ORDER BY criticality_score DESC').fetchall()
+    findings = db.execute('SELECT * FROM findings ORDER BY CASE risk_level WHEN "Critical" THEN 1 WHEN "High" THEN 2 WHEN "Medium" THEN 3 ELSE 4 END').fetchall()
+    org = db.execute('SELECT * FROM organization ORDER BY id DESC LIMIT 1').fetchone()
+
+    pending_evidence = db.execute("""
+        SELECT c.id as control_id, c.control_id as ctrl_code, c.description, c.function_name,
+               ar.status,
+               COUNT(e.id) as evidence_count
+        FROM audit_results ar
+        JOIN controls c ON ar.control_id = c.id
+        LEFT JOIN evidence e ON e.audit_result_id = ar.id
+        WHERE ar.status IN ('Non Compliant','Partially Compliant')
+        GROUP BY c.id
+        ORDER BY CASE ar.status WHEN 'Non Compliant' THEN 1 ELSE 2 END
+    """).fetchall()
+
+    findings_with_responses = []
+    for f in findings:
+        responses = db.execute(
+            'SELECT fr.*, u.full_name FROM finding_responses fr JOIN users u ON fr.user_id=u.id WHERE fr.finding_id=? ORDER BY fr.created_at',
+            (f['id'],)
+        ).fetchall()
+        findings_with_responses.append({'finding': f, 'responses': responses})
+
+    db.close()
+    return render_template('auditee_portal.html',
+        assets=assets, org=org,
+        pending_evidence=pending_evidence,
+        findings_with_responses=findings_with_responses)
+
+@app.route('/auditee/respond-finding/<int:finding_id>', methods=['POST'])
+@login_required
+@role_required('auditee')
+def auditee_respond_finding(finding_id):
+    comment = request.form.get('comment', '').strip()
+    if comment:
+        db = get_db()
+        db.execute('INSERT INTO finding_responses (finding_id, user_id, comment) VALUES (?,?,?)',
+                   (finding_id, session['user_id'], comment))
+        db.commit()
+        db.close()
+        flash('Response submitted successfully.', 'success')
+    else:
+        flash('Please enter a comment before submitting.', 'error')
+    return redirect(url_for('auditee_portal') + f'#finding-{finding_id}')
+
+@app.route('/findings/responses/<int:finding_id>')
+@login_required
+@role_required('admin', 'auditor')
+def finding_responses_view(finding_id):
+    db = get_db()
+    finding = db.execute('SELECT * FROM findings WHERE id=?', (finding_id,)).fetchone()
+    responses = db.execute(
+        'SELECT fr.*, u.full_name, u.role FROM finding_responses fr JOIN users u ON fr.user_id=u.id WHERE fr.finding_id=? ORDER BY fr.created_at',
+        (finding_id,)
+    ).fetchall()
+    db.close()
+    return jsonify({
+        'finding_title': finding['title'] if finding else 'Unknown',
+        'responses': [{'author': r['full_name'], 'role': r['role'], 'comment': r['comment'], 'date': r['created_at'][:10]} for r in responses]
+    })
 
 if __name__ == '__main__':
     os.makedirs('instance', exist_ok=True)
