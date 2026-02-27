@@ -904,7 +904,7 @@ def export_risk_assessment_pdf():
         canvas.rect(MARGIN, 1.1*cm, CONTENT_W, 0.03*cm, fill=1, stroke=0)
         canvas.setFillColor(GRAY_MUTED)
         canvas.setFont('Helvetica', 7)
-        canvas.drawString(MARGIN, 0.75*cm, f'ISO/IEC 27005 · NIST SP 800-30  |  {report_date}  |  CONFIDENTIAL')
+        canvas.drawString(MARGIN, 0.75*cm, f'NIST Cybersecurity Framework (CSF) 2.0  |  {report_date}  |  CONFIDENTIAL')
         canvas.drawRightString(W - MARGIN, 0.75*cm, f'Page {doc.page}')
         canvas.restoreState()
 
@@ -937,7 +937,7 @@ def export_risk_assessment_pdf():
         canvas.roundRect(MARGIN + 0.5*cm, H * 0.535, 5*cm, 0.55*cm, 4, fill=1, stroke=0)
         canvas.setFillColor(WHITE)
         canvas.setFont('Helvetica-Bold', 8)
-        canvas.drawString(MARGIN + 0.9*cm, H * 0.555, 'ISO/IEC 27005 · NIST SP 800-30')
+        canvas.drawString(MARGIN + 0.9*cm, H * 0.555, 'NIST Cybersecurity Framework (CSF) 2.0')
         canvas.setFillColor(colors.HexColor('#94a3b8'))
         canvas.setFont('Helvetica', 8)
         canvas.drawString(MARGIN + 0.5*cm, H * 0.49, f'Report Date: {report_date}')
@@ -977,7 +977,7 @@ def export_risk_assessment_pdf():
     story += section_title('1', 'Executive Summary')
     story.append(Paragraph(
         f'This risk assessment was conducted on <b>{org_name}</b> using a quantitative likelihood–impact '
-        f'scoring model aligned with ISO/IEC 27005 and NIST SP 800-30. A total of <b>{len(vulns)}</b> risks '
+        f'scoring model following the NIST Cybersecurity Framework (CSF) 2.0. A total of <b>{len(vulns)}</b> risks '
         f'were evaluated across <b>{len(assets)}</b> information assets.',
         sBody))
     story.append(Spacer(1, 0.2*cm))
@@ -1041,7 +1041,7 @@ def export_risk_assessment_pdf():
         [Paragraph('Exposure Level',  sBold), Paragraph((org['exposure_level'] or 'N/A') if org else 'N/A', sBody)],
         [Paragraph('Assets in Scope', sBold), Paragraph(str(len(assets)), sBody)],
         [Paragraph('Assessment Date', sBold), Paragraph(report_date, sBody)],
-        [Paragraph('Methodology',     sBold), Paragraph('ISO/IEC 27005 · NIST SP 800-30 Quantitative Risk Scoring', sBody)],
+        [Paragraph('Methodology',     sBold), Paragraph('NIST Cybersecurity Framework (CSF) 2.0 · Risk Score = Likelihood × Impact', sBody)],
     ]
     st = Table(scope_rows, colWidths=[4*cm, CONTENT_W - 4*cm])
     st.setStyle(TableStyle([
