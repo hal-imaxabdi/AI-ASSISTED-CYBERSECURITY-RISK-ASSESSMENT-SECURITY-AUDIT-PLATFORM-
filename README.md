@@ -45,14 +45,14 @@ ollama pull llama3.2
 
 ## Modules Implemented
 
-- ✅ Module 1: User & Role Management (Admin/Auditor/Auditee)
-- ✅ Module 2: Organization Profile with exposure determination
-- ✅ Module 3: Asset Inventory with CIA scores
-- ✅ Module 4: Threat & Vulnerability (OWASP pre-populated)
-- ✅ Module 5: Risk Assessment Engine (Risk = L × I)
-- ✅ Module 6: NIST CSF Control Audit Checklist (51 controls)
-- ✅ Module 7: Evidence Upload
-- ✅ Module 8: Compliance Scoring
-- ✅ Module 9: Audit Findings Generator
-- ✅ Module 10: AI Vulnerability Explainer (Ollama)
-- ✅ Module 11: Report Generator (HTML export)
+-  Module 1: User & Role Management (Admin/Auditor/Auditee)
+-  Module 2: Organization Profile with exposure determination
+-  Module 3: Asset Inventory with CIA scores
+-  Module 4: Threat & Vulnerability (OWASP pre-populated)
+-  Module 5: Risk Assessment Engine (Risk = L × I)
+-  Module 6: NIST CSF Control Audit Checklist (51 controls)
+-  Module 7: Evidence Upload
+-  Module 8: Compliance Scoring
+-  Module 9: Audit Findings Generator
+-  Module 10: AI Vulnerability Explainer (Ollama)
+-  Module 11: Report Generator 
